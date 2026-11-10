@@ -1,0 +1,7 @@
+﻿numpy>=1.26
+scipy>=1.11
+soundfile>=0.12
+pyroomacoustics>=0.7
+sounddevice>=0.4
+hidapi>=0.14
+pyserial>=3.5

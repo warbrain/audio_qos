@@ -1,0 +1,12 @@
+/build/
+.vs/
+.vscode/
+CMakeUserPresets.json
+*.user
+*.suo
+*.pdb
+
+
+# audio.cpp (audiocpp) runtime - see 3rd_party/audiocpp/README.md
+/3rd_party/audiocpp/bin/*.dll
+
