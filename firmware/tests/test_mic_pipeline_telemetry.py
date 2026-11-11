@@ -116,6 +116,7 @@ static bool s_pipeline_window_active,s_pipeline_report_ready;
 static uint32_t s_pipeline_report_sequence,s_pipeline_windows_lost;
 static uint32_t s_frame_dispatch_queue_full,s_frame_dispatch_invalidated,s_frame_dispatch_unavailable;
 static uint32_t s_owner_timing_event_drops,s_frame_dispatch_highwater,s_frame_dispatch_late_events;
+static uint32_t s_frame_dispatch_late_epoch,s_frame_dispatch_late_attribution;
 static mic_audio_diagnostics_snapshot_t s_pipeline_diagnostics_cache;
 static bool s_pipeline_diagnostics_cache_ready;
 static mic_wiener_timing_histogram_t s_pipeline_wiener_histogram[2];
@@ -263,10 +264,13 @@ def test_realtime_boundary_has_no_fft_format_or_sqrt_and_separate_background(tmp
     assert "s_stats_callback(" not in processing
     assert "s_frame_callback(" not in processing
     assert "dual_end_audio_sender_record_mic_work" not in processing
-    assert "xQueueSend(s_frame_dispatch_blocks,&dispatch,0)" in processing
+    assert "mic_frame_dispatch_publish(s_frame_callback,s_frame_user_ctx," in processing
     dispatch = function(mic, "mic_frame_dispatch_task_fn")
-    assert "xQueueReceive(s_frame_dispatch_blocks,&frame,portMAX_DELAY)" in dispatch
+    assert "while (mic_frame_dispatch_take(&slot))" in dispatch
     assert "dual_end_audio_sender_take_owner_timing" in dispatch
+    slot_take = function(mic, "mic_frame_dispatch_take")
+    assert "s_frame_dispatch_ring[s_frame_dispatch_ring_read]" in slot_take
+    assert "*slot_out=slot" in slot_take
     # The dispatcher is intentionally a separate worker.  The bounded config
     # worker also owns codec/layout transitions; the PCM owner only applies a
     # local commit at a frame boundary and never takes their mutex or sender.
@@ -307,7 +311,7 @@ def test_realtime_boundary_has_no_fft_format_or_sqrt_and_separate_background(tmp
     # it.  A failed setter can still reset the sender session, so every attempt
     # invalidates prior queued PCM before the gate is released.
     dispatch_take = dispatch.index("xSemaphoreTake(s_frame_dispatch_control,portMAX_DELAY)")
-    dispatch_callback = dispatch.index("frame.callback(frame.pcm")
+    dispatch_callback = dispatch.index("frame->callback(frame->pcm")
     dispatch_give = dispatch.index("xSemaphoreGive(s_frame_dispatch_control);", dispatch_callback)
     assert dispatch_take < dispatch_callback < dispatch_give
     for apply, setter, result in (
@@ -315,7 +319,10 @@ def test_realtime_boundary_has_no_fft_format_or_sqrt_and_separate_background(tmp
         (spatial_apply, "dual_end_audio_sender_set_processing_layout", "result"),
     ):
         setter_at = apply.index(setter)
-        invalidate_at = apply.index("mic_frame_dispatch_invalidate();")
+        invalidates = [index for index in range(len(apply))
+            if apply.startswith("mic_frame_dispatch_invalidate();", index)]
+        assert invalidates
+        invalidate_at = invalidates[-1]
         unlock_at = apply.index("mic_frame_dispatch_control_unlock();")
         assert setter_at < invalidate_at < unlock_at
         assert f"if ({result} == ESP_OK) mic_frame_dispatch_invalidate" not in apply

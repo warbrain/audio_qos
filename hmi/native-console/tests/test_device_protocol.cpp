@@ -30,9 +30,11 @@ std::string resource(unsigned part, unsigned sequence = 239)
 
 std::string dispatch(unsigned part, unsigned sequence = 77)
 {
+    const std::string extra = part == 15 ? ",\"le\":2" :
+        (part == 16 ? ",\"late_events\":3,\"la\":1" : "");
     return "{\"event\":\"audio.dispatch\",\"schema\":1,\"boot_id\":\"2e4523d4\",\"role\":0,\"session_id\":42,\"seq\":" +
         std::to_string(sequence) + ",\"part\":" + std::to_string(part) +
-        ",\"c\":4,\"m\":0" + (part == 0 ? ",\"part_count\":17" : "") + "}";
+        ",\"c\":4,\"m\":0" + (part == 0 ? ",\"part_count\":17" : "") + extra + "}";
 }
 
 std::string changed(std::string_view json, std::string key, Value value)

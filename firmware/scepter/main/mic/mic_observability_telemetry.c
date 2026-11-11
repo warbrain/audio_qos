@@ -422,8 +422,10 @@ size_t mic_dispatch_telemetry_format(const mic_pipeline_telemetry_t *record,
     case 12: fields = snprintf(tail, left, ",\"invalidated\":%" PRIu32 "}", record->dispatch_invalidated); break;
     case 13: fields = snprintf(tail, left, ",\"unavailable\":%" PRIu32 "}", record->dispatch_unavailable); break;
     case 14: fields = snprintf(tail, left, ",\"event_lost\":%" PRIu32 "}", record->dispatch_event_lost); break;
-    case 15: fields = snprintf(tail, left, ",\"queue_hi\":%" PRIu32 "}", record->dispatch_queue_highwater); break;
-    case 16: fields = snprintf(tail, left, ",\"late_events\":%" PRIu32 "}", record->dispatch_late_events); break;
+    case 15: fields = snprintf(tail, left, ",\"queue_hi\":%" PRIu32 ",\"le\":%" PRIu32 "}",
+        record->dispatch_queue_highwater, record->dispatch_late_epoch); break;
+    case 16: fields = snprintf(tail, left, ",\"late_events\":%" PRIu32 ",\"la\":%" PRIu32 "}",
+        record->dispatch_late_events, record->dispatch_late_attribution); break;
     }
     return observability_finish(buffer, capacity, prefix, fields);
 }

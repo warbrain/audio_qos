@@ -119,6 +119,9 @@ struct mic_pipeline_telemetry {
     /* Boot cumulative. Missing completion evidence remains unknown. */
     uint32_t dispatch_queue_full, dispatch_invalidated, dispatch_unavailable;
     uint32_t dispatch_event_lost, dispatch_queue_highwater, dispatch_late_events;
+    /* Reasons contributing to dispatch_late_events: stale dispatch epoch and
+     * completion that no longer matches the active telemetry window identity. */
+    uint32_t dispatch_late_epoch, dispatch_late_attribution;
     mic_nlms_telemetry_t nlms;
     /* Diagnostic/global IO counters are boot cumulative, captured at window
      * close. They are NOT per-window deltas. FFT completion is independent. */

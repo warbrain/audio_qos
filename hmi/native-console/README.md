@@ -82,7 +82,7 @@ Scepter 的 DTR/RTS 保持低；确认 Dongle 身份后开启其 CDC 日志镜�
 只读查询不改变增益、滤波、VAD、编码或空间模式。HMI 只能保存设备实际发出的数据，
 不能恢复固件在发送前已经丢弃或截断的日志。
 资源与 Dongle 分段查询会核对整组身份；跨窗口时最多追加两次整组重读，保留原始分段并记录混窗、重试和最终失败。
-Scepter 还会查询 `SCEPTER_TELEMETRY` kind 6 的 17 段 `audio.dispatch` 快照，覆盖 PCM 派发队列等待/帧龄及队列满、失效、不可用、丢事件、高水位和迟到事件计数；各段按启动、会话、序号、codec 与空间模式校验，完整组才记为 `snapshot_complete`。旧固件不支持时记录一次 `query_unavailable`，不会伪造缺失字段或零值。
+Scepter 还会查询 `SCEPTER_TELEMETRY` kind 6 的 17 段 `audio.dispatch` 快照，覆盖 PCM 派发队列等待/帧龄及队列满、失效、不可用、丢事件、高水位和迟到事件计数；part 15 的 `le` 表示旧 dispatch epoch 时序事件，part 16 的 `la` 表示无法归属当前窗口/会话/配置的时序完成，二者是 `late_events` 汇总的原因拆分，不表示 PCM 丢帧。各段按启动、会话、序号、codec 与空间模式校验，完整组才记为 `snapshot_complete`。旧固件不支持时记录一次 `query_unavailable`，不会伪造缺失字段或零值。
 写入或刷新失败后清除尚不可靠的去重历史，允许设备重发缓存再次保存；正常重连继续保留去重历史。
 Windows 串口接收已实现，其他平台返回明确的不可用状态。
 可单独构建 `hmi_device_telemetry_probe`，验证接收与落盘而不加载语音模型。

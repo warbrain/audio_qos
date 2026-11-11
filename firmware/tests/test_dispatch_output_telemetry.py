@@ -32,7 +32,8 @@ int main(void) {
     r.dispatch_queue_wait=r.dispatch_control_wait=r.dispatch_frame_age=
         (mic_pipeline_metric_t){UINT32_MAX,UINT32_MAX,UINT32_MAX,UINT64_MAX};
     r.dispatch_queue_full=r.dispatch_invalidated=r.dispatch_unavailable=
-        r.dispatch_event_lost=r.dispatch_queue_highwater=r.dispatch_late_events=UINT32_MAX;
+        r.dispatch_event_lost=r.dispatch_queue_highwater=r.dispatch_late_events=
+        r.dispatch_late_epoch=r.dispatch_late_attribution=UINT32_MAX;
     r.capture_health.output=(mic_output_health_t){.samples=UINT64_MAX,
         .sum_sq={UINT64_MAX,UINT64_MAX},.limited_frames=UINT64_MAX,
         .peak={UINT32_MAX,UINT32_MAX}};
@@ -78,6 +79,7 @@ int main(void) {
     unknown = {key: value for row in rows[24:41] for key, value in row.items()}
     output = {key: value for row in rows[41:] for key, value in row.items()}
     assert dispatch["qw_us"] == str(2**64 - 1) and dispatch["queue_full"] == 2**32 - 1
+    assert dispatch["le"] == 2**32 - 1 and dispatch["la"] == 2**32 - 1
     assert unknown["qw_lo"] is None and unknown["fa_hi"] is None
     assert output["l_rms"] is None and output["l_peak"] is None and output["limited_pct"] is None
 
@@ -130,6 +132,7 @@ static bool s_pipeline_window_active=true;
 static unsigned records,locked;
 static int s_pipeline_lock;
 static uint32_t s_frame_dispatch_late_events;
+static uint32_t s_frame_dispatch_late_epoch,s_frame_dispatch_late_attribution;
 #define DUAL_END_STAGE_MIC_PIPELINE 1
 #define portENTER_CRITICAL(p) ((void)(p),assert(!locked),++locked)
 #define portEXIT_CRITICAL(p) ((void)(p),assert(locked),--locked)
@@ -148,9 +151,11 @@ int main(void){
  assert(s_pipeline_window.dispatch_control_wait.us==4000&&s_pipeline_window.dispatch_frame_age.us==5200);
  e.dispatch_epoch=8;mic_pipeline_record_owner_timing_event(&e);assert(records==1);
  e.dispatch_epoch=7;e.timing.session_id=99;mic_pipeline_record_owner_timing_event(&e);
- assert(s_frame_dispatch_late_events==2&&s_pipeline_window.dispatch_queue_wait.n==1);
+  assert(s_frame_dispatch_late_events==2&&s_frame_dispatch_late_epoch==1&&
+    s_frame_dispatch_late_attribution==1&&s_pipeline_window.dispatch_queue_wait.n==1);
  e.timing.session_id=2;e.enqueued_us=149;mic_pipeline_record_owner_timing_event(&e);
- assert(s_frame_dispatch_late_events==3&&s_pipeline_window.dispatch_queue_wait.n==1);
+  assert(s_frame_dispatch_late_events==3&&s_frame_dispatch_late_epoch==1&&
+    s_frame_dispatch_late_attribution==2&&s_pipeline_window.dispatch_queue_wait.n==1);
  e.timing.session_id=2;e.enqueued_us=1300;e.control_ready_us=1100;e.captured_us=6000;
  mic_pipeline_record_owner_timing_event(&e);
  assert(s_pipeline_window.dispatch_queue_wait.n==1&&s_pipeline_window.dispatch_control_wait.n==1);
@@ -247,7 +252,7 @@ static dual_end_audio_analysis_metadata_t s_diagnostic_metadata;
 static uint32_t s_frame_dispatch_invalidated,s_frame_dispatch_queue_full;
 static uint32_t s_frame_dispatch_highwater,s_frame_dispatch_unavailable,s_pipeline_deadline_misses;
 static uint64_t s_pipeline_last_overrun_us;
-static int s_frame_dispatch_blocks=1;
+static int s_frame_dispatch_task=1;
 static void *s_frame_user_ctx;
 static void callback(const int16_t *pcm,size_t count,
     const dual_end_audio_analysis_metadata_t *analysis,void *ctx){
@@ -272,7 +277,7 @@ static void mic_spatial_reset_state_owner(uint16_t mode){
     assert(mode==0);s_spatial->stats.mode=mode;++s_spatial->stats.generation;
 }
 static void mic_owner_apply_spatial_commit(void){}
-static bool mic_owner_spatial_transition_active(void){return false;}
+static bool mic_owner_dispatch_transition_active(void){return false;}
 static uint32_t mic_frame_dispatch_epoch_load(void){return 7;}
 static void mic_drain_owner_timing_events(void){}
 static void mic_spatial_cache_snapshot(void){
@@ -310,15 +315,19 @@ static void queue_oracle(mic_output_health_t *expected,const int16_t *pcm){
         if(magnitude>expected->peak[i%2U])expected->peak[i%2U]=magnitude;
     }
 }
-static int xQueueSend(int queue,const void *value,unsigned wait){
-    assert(queue==1 && !wait && !locks);
-    const mic_frame_dispatch_t *frame=value;
-    assert(frame->callback==callback && frame->dispatch_epoch==7 && frame->capture_generation==1);
-    queue_oracle(&expected_groups[fixture_group],frame->pcm);
-    queue_oracle(&expected_interval,frame->pcm);
-    ++queued_packets;return pdTRUE;
+static bool mic_frame_dispatch_publish(mic_audio_frame_cb_t frame_callback,void *ctx,
+    const dual_end_audio_analysis_metadata_t *analysis,uint64_t enqueued_us,
+    uint64_t captured_us,uint32_t boot_id,uint32_t capture_generation,
+    uint32_t dispatch_epoch,uint16_t spatial_generation,uint8_t spatial_mode,
+    const int16_t *pcm){
+    assert(frame_callback==callback&&ctx==s_frame_user_ctx&&analysis);
+    assert(enqueued_us>=captured_us&&boot_id==7U&&capture_generation==1U&&
+        dispatch_epoch==7U&&spatial_mode==0U);
+    (void)spatial_generation;
+    queue_oracle(&expected_groups[fixture_group],pcm);
+    queue_oracle(&expected_interval,pcm);
+    ++queued_packets;s_frame_dispatch_highwater=1U;return true;
 }
-static unsigned uxQueueMessagesWaiting(int queue){assert(queue==1);return 1;}
 '''
     if "s_frame_dispatch_drops" in processing:
         code += "\nstatic uint32_t s_frame_dispatch_drops;\n"
