@@ -230,11 +230,9 @@ static mic_audio_frame_cb_t s_frame_callback;
 static void *s_frame_user_ctx;
 static mic_audio_stats_cb_t s_stats_callback;
 static void *s_stats_user_ctx;
-/* A queued callback carries this generation.  Config/capture resets advance it
- * so the worker can discard old PCM without touching a queue in flight. */
+/* The short critical section protects both the dispatch epoch and the SPSC
+ * slot ring. It never surrounds PCM copies, sender locks, codec or radio work. */
 static uint32_t s_frame_dispatch_epoch = 1U;
-/* A short spin-copy lock protects this cross-core stale-frame generation. It
- * is never the sender mutex and never surrounds codec/radio work. */
 static portMUX_TYPE s_frame_dispatch_epoch_lock = portMUX_INITIALIZER_UNLOCKED;
 
 /* Audio task owns DSP state. Control task publishes settings under a short lock.
@@ -748,11 +746,13 @@ static void mic_vad_process(int16_t *pcm) {
 }
 
 
-/* Bounded IO/compute separation. Queues copy complete synchronized blocks;
- * producer storage is never handed to an asynchronous consumer by reference.
- * 4 raw blocks = 15 KiB plus queue overhead. DMA remains driver-owned. */
+/* Bounded IO/compute separation. The capture queue copies synchronized raw
+ * blocks; encoded-frame dispatch uses a fixed PCM pool plus a slot-ID SPSC
+ * ring, so it never copies a full PCM frame into a FreeRTOS queue. DMA remains
+ * driver-owned. 4 raw blocks = 15 KiB plus queue overhead. */
 #define MIC_PIPELINE_BLOCKS 4
 #define MIC_FRAME_DISPATCH_BLOCKS 2
+#define MIC_FRAME_DISPATCH_POOL_SLOTS (MIC_FRAME_DISPATCH_BLOCKS + 1U)
 #define MIC_CAPTURE_TASK_STACK 4096
 #define MIC_DIAGNOSTIC_TASK_STACK 8192
 #define MIC_TELEMETRY_TASK_STACK 6144
@@ -769,6 +769,8 @@ _Static_assert(MIC_PIPELINE_BLOCKS > 0 && MIC_PIPELINE_BLOCKS <= 4,
     "capture buffering must remain bounded to at most 80ms");
 _Static_assert(MIC_FRAME_DISPATCH_BLOCKS > 0 && MIC_FRAME_DISPATCH_BLOCKS <= 2,
     "frame dispatch must remain bounded to at most 40ms");
+_Static_assert(MIC_FRAME_DISPATCH_POOL_SLOTS <= UINT8_MAX,
+    "frame dispatch slot IDs must fit in one byte");
 typedef struct {
     uint32_t sequence, generation;
     bool motor_active;
@@ -804,8 +806,21 @@ typedef struct {
 } mic_owner_timing_event_t;
 _Static_assert(offsetof(mic_frame_dispatch_t, pcm) % 16 == 0,
     "frame-dispatch PCM member alignment");
-static QueueHandle_t s_capture_blocks, s_diagnostic_blocks, s_frame_dispatch_blocks,
-    s_owner_timing_events;
+typedef enum {
+    MIC_FRAME_SLOT_FREE = 0,
+    MIC_FRAME_SLOT_WRITING,
+    MIC_FRAME_SLOT_QUEUED,
+    MIC_FRAME_SLOT_IN_FLIGHT,
+} mic_frame_slot_state_t;
+/* Two ready slots preserve the existing queued-frame bound; a third slot holds
+ * the dispatch worker's in-flight callback. PCM lives here for its full async
+ * lifetime and the SPSC ring carries only one-byte slot IDs. */
+_Alignas(16) static mic_frame_dispatch_t s_frame_dispatch_pool[MIC_FRAME_DISPATCH_POOL_SLOTS];
+static uint8_t s_frame_dispatch_ring[MIC_FRAME_DISPATCH_BLOCKS];
+static mic_frame_slot_state_t s_frame_dispatch_slot_state[MIC_FRAME_DISPATCH_POOL_SLOTS];
+static uint8_t s_frame_dispatch_ring_read, s_frame_dispatch_ring_write;
+static uint8_t s_frame_dispatch_ring_count, s_frame_dispatch_reserved;
+static QueueHandle_t s_capture_blocks, s_diagnostic_blocks, s_owner_timing_events;
 static SemaphoreHandle_t s_capture_io_lock, s_frame_dispatch_control;
 static TaskHandle_t s_capture_task, s_diagnostic_task, s_telemetry_task,
     s_frame_dispatch_task;
@@ -843,16 +858,171 @@ static bool s_pipeline_diagnostics_cache_ready;
 
 static void mic_frame_dispatch_reset_stale_queue(void)
 {
-    if (!s_frame_dispatch_blocks) return;
-    const UBaseType_t queued=uxQueueMessagesWaiting(s_frame_dispatch_blocks);
-    if (queued==0U || xQueueReset(s_frame_dispatch_blocks)!=pdPASS) return;
-    /* Count intentionally discarded old-codec frames in the existing
+    uint32_t queued=0U;
+    portENTER_CRITICAL(&s_frame_dispatch_epoch_lock);
+    queued=s_frame_dispatch_ring_count;
+    for (uint32_t i=0U;i<queued;++i) {
+        const uint8_t slot=s_frame_dispatch_ring[s_frame_dispatch_ring_read];
+        s_frame_dispatch_ring_read=(uint8_t)((s_frame_dispatch_ring_read+1U)%
+                                             MIC_FRAME_DISPATCH_BLOCKS);
+        if (slot<MIC_FRAME_DISPATCH_POOL_SLOTS &&
+            s_frame_dispatch_slot_state[slot]==MIC_FRAME_SLOT_QUEUED) {
+            s_frame_dispatch_slot_state[slot]=MIC_FRAME_SLOT_FREE;
+        }
+    }
+    s_frame_dispatch_ring_read=0U;
+    s_frame_dispatch_ring_write=0U;
+    s_frame_dispatch_ring_count=0U;
+    portEXIT_CRITICAL(&s_frame_dispatch_epoch_lock);
+    if (queued==0U) return;
+    /* Count intentionally discarded old-codec frames using the existing
      * invalidation metric so the transition remains visible in telemetry. */
     portENTER_CRITICAL(&s_pipeline_lock);
-    const uint32_t dropped=(uint32_t)queued;
-    s_frame_dispatch_invalidated=UINT32_MAX-s_frame_dispatch_invalidated<dropped ?
-        UINT32_MAX : s_frame_dispatch_invalidated+dropped;
+    s_frame_dispatch_invalidated=UINT32_MAX-s_frame_dispatch_invalidated<queued ?
+        UINT32_MAX : s_frame_dispatch_invalidated+queued;
     portEXIT_CRITICAL(&s_pipeline_lock);
+}
+
+static void mic_frame_dispatch_note_queue_full(void)
+{
+    portENTER_CRITICAL(&s_pipeline_lock);
+    if (s_frame_dispatch_queue_full!=UINT32_MAX) ++s_frame_dispatch_queue_full;
+    portEXIT_CRITICAL(&s_pipeline_lock);
+}
+
+static void mic_frame_dispatch_note_invalidated(void)
+{
+    portENTER_CRITICAL(&s_pipeline_lock);
+    if (s_frame_dispatch_invalidated!=UINT32_MAX) ++s_frame_dispatch_invalidated;
+    portEXIT_CRITICAL(&s_pipeline_lock);
+}
+
+/* Single producer: the 20 ms DSP owner. Reserve a preallocated slot under a
+ * short critical section, copy PCM once outside the lock, then publish its ID.
+ * The epoch check at publish closes the codec/layout-reset race. */
+static bool mic_frame_dispatch_publish(mic_audio_frame_cb_t callback, void *user_ctx,
+    const dual_end_audio_analysis_metadata_t *analysis, uint64_t enqueued_us,
+    uint64_t captured_us, uint32_t boot_id, uint32_t capture_generation,
+    uint32_t dispatch_epoch, uint16_t spatial_generation, uint8_t spatial_mode,
+    const int16_t *pcm)
+{
+    if (!callback || !analysis || !pcm || !s_frame_dispatch_task) return false;
+
+    uint8_t slot=UINT8_MAX;
+    bool stale=false,full=false;
+    portENTER_CRITICAL(&s_frame_dispatch_epoch_lock);
+    if (dispatch_epoch!=s_frame_dispatch_epoch) {
+        stale=true;
+    } else if ((uint16_t)s_frame_dispatch_ring_count+s_frame_dispatch_reserved>=
+               MIC_FRAME_DISPATCH_BLOCKS) {
+        full=true;
+    } else {
+        for (uint8_t i=0U;i<MIC_FRAME_DISPATCH_POOL_SLOTS;++i) {
+            if (s_frame_dispatch_slot_state[i]==MIC_FRAME_SLOT_FREE) {
+                slot=i;
+                s_frame_dispatch_slot_state[i]=MIC_FRAME_SLOT_WRITING;
+                ++s_frame_dispatch_reserved;
+                break;
+            }
+        }
+        if (slot==UINT8_MAX) full=true;
+    }
+    portEXIT_CRITICAL(&s_frame_dispatch_epoch_lock);
+
+    if (stale) {
+        mic_frame_dispatch_note_invalidated();
+        return false;
+    }
+    if (full) {
+        mic_frame_dispatch_note_queue_full();
+        return false;
+    }
+
+    mic_frame_dispatch_t *frame=&s_frame_dispatch_pool[slot];
+    frame->callback=callback;
+    frame->user_ctx=user_ctx;
+    frame->analysis=*analysis;
+    frame->enqueued_us=enqueued_us;
+    frame->captured_us=captured_us;
+    frame->boot_id=boot_id;
+    frame->capture_generation=capture_generation;
+    frame->dispatch_epoch=dispatch_epoch;
+    frame->spatial_generation=spatial_generation;
+    frame->spatial_mode=spatial_mode;
+    memcpy(frame->pcm,pcm,sizeof(frame->pcm));
+
+    uint8_t depth=0U;
+    stale=false;
+    full=false;
+    portENTER_CRITICAL(&s_frame_dispatch_epoch_lock);
+    if (s_frame_dispatch_reserved>0U) --s_frame_dispatch_reserved;
+    if (dispatch_epoch!=s_frame_dispatch_epoch) {
+        s_frame_dispatch_slot_state[slot]=MIC_FRAME_SLOT_FREE;
+        stale=true;
+    } else if (s_frame_dispatch_ring_count>=MIC_FRAME_DISPATCH_BLOCKS ||
+               s_frame_dispatch_slot_state[slot]!=MIC_FRAME_SLOT_WRITING) {
+        s_frame_dispatch_slot_state[slot]=MIC_FRAME_SLOT_FREE;
+        full=true;
+    } else {
+        s_frame_dispatch_ring[s_frame_dispatch_ring_write]=slot;
+        s_frame_dispatch_ring_write=(uint8_t)((s_frame_dispatch_ring_write+1U)%
+                                              MIC_FRAME_DISPATCH_BLOCKS);
+        ++s_frame_dispatch_ring_count;
+        s_frame_dispatch_slot_state[slot]=MIC_FRAME_SLOT_QUEUED;
+        depth=s_frame_dispatch_ring_count;
+    }
+    portEXIT_CRITICAL(&s_frame_dispatch_epoch_lock);
+
+    if (stale) {
+        mic_frame_dispatch_note_invalidated();
+        return false;
+    }
+    if (full) {
+        mic_frame_dispatch_note_queue_full();
+        return false;
+    }
+    portENTER_CRITICAL(&s_pipeline_lock);
+    if (depth>s_frame_dispatch_highwater) s_frame_dispatch_highwater=depth;
+    portEXIT_CRITICAL(&s_pipeline_lock);
+    xTaskNotifyGive(s_frame_dispatch_task);
+    return true;
+}
+
+/* Single consumer: removes only the slot ID. The slot remains owned by the
+ * dispatch worker until mic_frame_dispatch_release after callback/telemetry. */
+static bool mic_frame_dispatch_take(uint8_t *slot_out)
+{
+    if (!slot_out) return false;
+    bool available=false,invalid=false;
+    portENTER_CRITICAL(&s_frame_dispatch_epoch_lock);
+    if (s_frame_dispatch_ring_count>0U) {
+        const uint8_t slot=s_frame_dispatch_ring[s_frame_dispatch_ring_read];
+        s_frame_dispatch_ring_read=(uint8_t)((s_frame_dispatch_ring_read+1U)%
+                                             MIC_FRAME_DISPATCH_BLOCKS);
+        --s_frame_dispatch_ring_count;
+        if (slot<MIC_FRAME_DISPATCH_POOL_SLOTS &&
+            s_frame_dispatch_slot_state[slot]==MIC_FRAME_SLOT_QUEUED) {
+            s_frame_dispatch_slot_state[slot]=MIC_FRAME_SLOT_IN_FLIGHT;
+            *slot_out=slot;
+            available=true;
+        } else invalid=true;
+    }
+    portEXIT_CRITICAL(&s_frame_dispatch_epoch_lock);
+    if (invalid) {
+        portENTER_CRITICAL(&s_pipeline_lock);
+        if (s_frame_dispatch_unavailable!=UINT32_MAX) ++s_frame_dispatch_unavailable;
+        portEXIT_CRITICAL(&s_pipeline_lock);
+    }
+    return available;
+}
+
+static void mic_frame_dispatch_release(uint8_t slot)
+{
+    if (slot>=MIC_FRAME_DISPATCH_POOL_SLOTS) return;
+    portENTER_CRITICAL(&s_frame_dispatch_epoch_lock);
+    if (s_frame_dispatch_slot_state[slot]==MIC_FRAME_SLOT_IN_FLIGHT)
+        s_frame_dispatch_slot_state[slot]=MIC_FRAME_SLOT_FREE;
+    portEXIT_CRITICAL(&s_frame_dispatch_epoch_lock);
 }
 
 static void mic_frame_dispatch_control_lock(void)
@@ -1263,67 +1433,71 @@ static void mic_diagnostic_task(void *arg) {
 
 /* This task is the only place that invokes the registered frame callback.
  * It may take the sender mutex, encode, submit to radio and emit sender logs.
- * The PCM/DSP owner below only makes a bounded zero-wait copy into its queue. */
+ * The DSP owner publishes a slot ID to the fixed SPSC ring and never waits. */
 static void mic_frame_dispatch_task_fn(void *arg)
 {
     (void)arg;
-    mic_frame_dispatch_t frame;
     while (true) {
-        if (xQueueReceive(s_frame_dispatch_blocks,&frame,portMAX_DELAY)!=pdTRUE)
-            continue;
-        const uint64_t dequeued_us=(uint64_t)esp_timer_get_time();
-        /* A configuration transition holds this lock across sender session
-         * mutation.  Taking it here prevents a queued old frame from being
-         * encoded under a new codec/layout/session.  This worker is outside
-         * the PCM/DSP real-time owner, where no blocking sender path remains. */
-        if (!s_frame_dispatch_control ||
-            xSemaphoreTake(s_frame_dispatch_control,portMAX_DELAY)!=pdTRUE) {
-            portENTER_CRITICAL(&s_pipeline_lock);
-            if (s_frame_dispatch_unavailable!=UINT32_MAX) ++s_frame_dispatch_unavailable;
-            portEXIT_CRITICAL(&s_pipeline_lock);
-            continue;
-        }
-        const uint64_t control_ready_us=(uint64_t)esp_timer_get_time();
-        if (!s_capture_enabled || frame.dispatch_epoch!=mic_frame_dispatch_epoch_load()) {
-            portENTER_CRITICAL(&s_pipeline_lock);
-            if (s_frame_dispatch_invalidated!=UINT32_MAX) ++s_frame_dispatch_invalidated;
-            portEXIT_CRITICAL(&s_pipeline_lock);
+        (void)ulTaskNotifyTake(pdTRUE,portMAX_DELAY);
+        uint8_t slot=UINT8_MAX;
+        while (mic_frame_dispatch_take(&slot)) {
+            mic_frame_dispatch_t *frame=&s_frame_dispatch_pool[slot];
+            const uint64_t dequeued_us=(uint64_t)esp_timer_get_time();
+            /* A configuration transition holds this lock across sender
+             * session mutation. The PCM slot stays owned until callback and
+             * timing-event handling have finished. */
+            if (!s_frame_dispatch_control ||
+                xSemaphoreTake(s_frame_dispatch_control,portMAX_DELAY)!=pdTRUE) {
+                portENTER_CRITICAL(&s_pipeline_lock);
+                if (s_frame_dispatch_unavailable!=UINT32_MAX) ++s_frame_dispatch_unavailable;
+                portEXIT_CRITICAL(&s_pipeline_lock);
+                mic_frame_dispatch_release(slot);
+                continue;
+            }
+            const uint64_t control_ready_us=(uint64_t)esp_timer_get_time();
+            if (!s_capture_enabled || frame->dispatch_epoch!=mic_frame_dispatch_epoch_load()) {
+                mic_frame_dispatch_note_invalidated();
+                xSemaphoreGive(s_frame_dispatch_control);
+                mic_frame_dispatch_release(slot);
+                continue;
+            }
+            const int64_t work_started_us=esp_timer_get_time();
+            if (frame->callback) {
+                frame->callback(frame->pcm,MIC_OUTPUT_SAMPLE_VALUES_PER_PACKET,
+                               &frame->analysis,frame->user_ctx);
+            }
+            const int64_t work_finished_us=esp_timer_get_time();
+            dual_end_audio_owner_timing_t timing={0};
+            const bool have_timing=dual_end_audio_sender_take_owner_timing(&timing);
             xSemaphoreGive(s_frame_dispatch_control);
-            continue;
-        }
-        const int64_t work_started_us=esp_timer_get_time();
-        if (frame.callback) {
-            frame.callback(frame.pcm,MIC_OUTPUT_SAMPLE_VALUES_PER_PACKET,
-                           &frame.analysis,frame.user_ctx);
-        }
-        const int64_t work_finished_us=esp_timer_get_time();
-        dual_end_audio_owner_timing_t timing={0};
-        const bool have_timing=dual_end_audio_sender_take_owner_timing(&timing);
-        xSemaphoreGive(s_frame_dispatch_control);
-        if (!have_timing) continue;
-        const int64_t elapsed_us=work_finished_us-work_started_us;
-        const mic_owner_timing_event_t event={
-            .timing=timing,
-            .enqueued_us=frame.enqueued_us,
-            .dequeued_us=dequeued_us,
-            .control_ready_us=control_ready_us,
-            .captured_us=frame.captured_us,
-            .callback_started_us=(uint64_t)work_started_us,
-            .boot_id=frame.boot_id,
-            .capture_generation=frame.capture_generation,
-            .dispatch_epoch=frame.dispatch_epoch,
-            .spatial_generation=frame.spatial_generation,
-            .spatial_mode=frame.spatial_mode,
-            .work_us=elapsed_us<=0 ? 0U :
-                ((uint64_t)elapsed_us>UINT32_MAX ? UINT32_MAX : (uint32_t)elapsed_us),
-        };
-        if (!s_owner_timing_events ||
-            xQueueSend(s_owner_timing_events,&event,0)!=pdTRUE) {
-            /* This is optional evidence only.  It must never delay audio or
-             * cause a callback retry; the real sender result is already final. */
-            portENTER_CRITICAL(&s_pipeline_lock);
-            if (s_owner_timing_event_drops!=UINT32_MAX) ++s_owner_timing_event_drops;
-            portEXIT_CRITICAL(&s_pipeline_lock);
+            if (!have_timing) {
+                mic_frame_dispatch_release(slot);
+                continue;
+            }
+            const int64_t elapsed_us=work_finished_us-work_started_us;
+            const mic_owner_timing_event_t event={
+                .timing=timing,
+                .enqueued_us=frame->enqueued_us,
+                .dequeued_us=dequeued_us,
+                .control_ready_us=control_ready_us,
+                .captured_us=frame->captured_us,
+                .callback_started_us=(uint64_t)work_started_us,
+                .boot_id=frame->boot_id,
+                .capture_generation=frame->capture_generation,
+                .dispatch_epoch=frame->dispatch_epoch,
+                .spatial_generation=frame->spatial_generation,
+                .spatial_mode=frame->spatial_mode,
+                .work_us=elapsed_us<=0 ? 0U :
+                    ((uint64_t)elapsed_us>UINT32_MAX ? UINT32_MAX : (uint32_t)elapsed_us),
+            };
+            if (!s_owner_timing_events ||
+                xQueueSend(s_owner_timing_events,&event,0)!=pdTRUE) {
+                /* Optional evidence must never delay audio or retry a callback. */
+                portENTER_CRITICAL(&s_pipeline_lock);
+                if (s_owner_timing_event_drops!=UINT32_MAX) ++s_owner_timing_event_drops;
+                portEXIT_CRITICAL(&s_pipeline_lock);
+            }
+            mic_frame_dispatch_release(slot);
         }
     }
 }
@@ -1693,7 +1867,6 @@ static void mic_audio_task(void *arg)
 
     s_capture_blocks=xQueueCreate(MIC_PIPELINE_BLOCKS,sizeof(mic_capture_block_t));
     s_diagnostic_blocks=diagnostic_block ? xQueueCreate(1,sizeof(mic_capture_block_t)) : NULL;
-    s_frame_dispatch_blocks=xQueueCreate(MIC_FRAME_DISPATCH_BLOCKS,sizeof(mic_frame_dispatch_t));
     /* Completion evidence is optional.  Audio sending remains available when
      * this small diagnostics-only queue cannot be allocated. */
     s_owner_timing_events=xQueueCreate(MIC_FRAME_DISPATCH_BLOCKS,
@@ -1703,13 +1876,12 @@ static void mic_audio_task(void *arg)
      * transition contract.  It is not used by the per-frame DSP owner. */
     s_frame_dispatch_control=xSemaphoreCreateMutex();
     if (!raw_buf || !capture_block || !pcm_buf ||
-        !s_capture_blocks || !s_frame_dispatch_blocks || !s_capture_io_lock ||
+        !s_capture_blocks || !s_capture_io_lock ||
         !s_frame_dispatch_control) {
         ESP_LOGE(TAG, "failed to allocate dual-mic audio buffers");
         free(processing_block); free(capture_block); free(diagnostic_block);
         if(s_capture_blocks)vQueueDelete(s_capture_blocks);
         if(s_diagnostic_blocks)vQueueDelete(s_diagnostic_blocks);
-        if(s_frame_dispatch_blocks)vQueueDelete(s_frame_dispatch_blocks);
         if(s_owner_timing_events)vQueueDelete(s_owner_timing_events);
         if(s_capture_io_lock)vSemaphoreDelete(s_capture_io_lock);
         if(s_frame_dispatch_control)vSemaphoreDelete(s_frame_dispatch_control);
@@ -1791,7 +1963,7 @@ static void mic_audio_task(void *arg)
         free(processing_block);free(capture_block);free(diagnostic_block);
         free(pcm_buf);
         vQueueDelete(s_capture_blocks);if(s_diagnostic_blocks)vQueueDelete(s_diagnostic_blocks);
-        vQueueDelete(s_frame_dispatch_blocks);if(s_owner_timing_events)vQueueDelete(s_owner_timing_events);
+        if(s_owner_timing_events)vQueueDelete(s_owner_timing_events);
         vSemaphoreDelete(s_capture_io_lock);vSemaphoreDelete(s_frame_dispatch_control);
         xEventGroupSetBits(s_mic_state_events,MIC_START_FAILED_BIT);
         for(;;)(void)ulTaskNotifyTake(pdTRUE,portMAX_DELAY);
@@ -1807,6 +1979,9 @@ static void mic_audio_task(void *arg)
     }
     if(telemetry_ok!=pdPASS)ESP_LOGW(TAG,"optional microphone telemetry unavailable; audio remains enabled");
     if(!s_owner_timing_events)ESP_LOGW(TAG,"optional sender timing telemetry unavailable; audio remains enabled");
+    ESP_LOGI(TAG,"frame dispatch fixed pool=%u slots, SPSC ring=%u queued slots",
+             (unsigned)MIC_FRAME_DISPATCH_POOL_SLOTS,
+             (unsigned)MIC_FRAME_DISPATCH_BLOCKS);
     s_capture_io_running=true;
     xTaskNotifyGive(s_capture_task);
     if(s_diagnostic_task)xTaskNotifyGive(s_diagnostic_task);
@@ -1974,30 +2149,13 @@ static void mic_audio_task(void *arg)
                     portENTER_CRITICAL(&s_pipeline_lock);
                     if (s_frame_dispatch_invalidated!=UINT32_MAX) ++s_frame_dispatch_invalidated;
                     portEXIT_CRITICAL(&s_pipeline_lock);
-                } else if (s_frame_callback && s_frame_dispatch_blocks) {
-                    mic_frame_dispatch_t dispatch={
-                        .callback=s_frame_callback,
-                        .user_ctx=s_frame_user_ctx,
-                        .analysis=analysis,
-                        .enqueued_us=(uint64_t)callback_started_us,
-                        .captured_us=processing_block->captured_us,
-                        .boot_id=dispatch_identity.boot_id,
-                        .capture_generation=processing_block->generation,
-                        .dispatch_epoch=pcm_dispatch_epoch,
-                        .spatial_generation=dispatch_identity.generation,
-                        .spatial_mode=(uint8_t)dispatch_identity.applied,
-                    };
-                    memcpy(dispatch.pcm,pcm_buf,sizeof(dispatch.pcm));
-                    if (xQueueSend(s_frame_dispatch_blocks,&dispatch,0)!=pdTRUE) {
-                        portENTER_CRITICAL(&s_pipeline_lock);
-                        if (s_frame_dispatch_queue_full!=UINT32_MAX) ++s_frame_dispatch_queue_full;
-                        portEXIT_CRITICAL(&s_pipeline_lock);
-                    } else {
-                        const uint32_t depth=(uint32_t)uxQueueMessagesWaiting(s_frame_dispatch_blocks);
-                        portENTER_CRITICAL(&s_pipeline_lock);
-                        if (depth>s_frame_dispatch_highwater) s_frame_dispatch_highwater=depth;
-                        portEXIT_CRITICAL(&s_pipeline_lock);
-                    }
+                } else if (s_frame_callback && s_frame_dispatch_task) {
+                    (void)mic_frame_dispatch_publish(s_frame_callback,s_frame_user_ctx,
+                        &analysis,(uint64_t)callback_started_us,
+                        processing_block->captured_us,dispatch_identity.boot_id,
+                        processing_block->generation,pcm_dispatch_epoch,
+                        dispatch_identity.generation,(uint8_t)dispatch_identity.applied,
+                        pcm_buf);
                 } else {
                     portENTER_CRITICAL(&s_pipeline_lock);
                     if (s_frame_dispatch_unavailable!=UINT32_MAX) ++s_frame_dispatch_unavailable;
@@ -2014,8 +2172,8 @@ static void mic_audio_task(void *arg)
                     portEXIT_CRITICAL(&s_pipeline_lock);
                 }
                 /* d is the remaining timed owner work, not another full-frame
-                 * timer.  w includes DSP, spatial processing and the bounded
-                 * queue copy; asynchronous codec/radio timing is published
+                 * timer. w includes DSP, spatial processing and the bounded
+                 * PCM-pool copy/slot publish; asynchronous codec/radio timing is published
                  * separately when its matching completion arrives. */
                 const int64_t dsp_us=frame_processing_us-spatial_elapsed_us-callback_us;
                 mic_pipeline_record_block(processing_block,dequeued_us,
