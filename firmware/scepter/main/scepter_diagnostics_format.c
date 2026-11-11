@@ -21,6 +21,8 @@ unsigned scepter_diagnostics_part_count(unsigned kind)
         return MIC_NLMS_TELEMETRY_PARTS;
     case SCEPTER_DIAGNOSTICS_KIND_WIENER:
         return SCEPTER_DIAGNOSTICS_WIENER_PARTS;
+    case SCEPTER_DIAGNOSTICS_KIND_DISPATCH:
+        return MIC_DISPATCH_TELEMETRY_PARTS;
     default:
         return 0;
     }
@@ -188,6 +190,12 @@ size_t scepter_diagnostics_format_part(
         if (schema) *schema = 1U;
         if (active) *active = snapshot->wiener.available;
         return wiener_format_part(snapshot, part, buffer, capacity);
+    case SCEPTER_DIAGNOSTICS_KIND_DISPATCH:
+        if (event_name) *event_name = "audio.dispatch";
+        if (schema) *schema = 1U;
+        if (active) *active = true;
+        return mic_dispatch_telemetry_format(&snapshot->pipeline, part,
+                                             buffer, capacity);
     default:
         return 0;
     }

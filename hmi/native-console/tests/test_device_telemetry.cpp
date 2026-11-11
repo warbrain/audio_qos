@@ -79,6 +79,20 @@ HMI_TEST(device_telemetry_supports_compact_dongle_identity)
     CHECK(records[1].duplicate);
 }
 
+HMI_TEST(device_telemetry_decodes_scepter_dispatch_query_replies)
+{
+    hmi::device::TelemetryDecoder decoder;
+    const std::string payload = R"({"event":"audio.dispatch","schema":1,"boot_id":"12345678","role":0,"session_id":42,"seq":7,"part":0,"part_count":17,"c":4,"m":0})";
+    const auto records = decoder.feed("I (12) mic: " + payload +
+        "\nOK SCEPTER_TELEMETRY token=10 kind=6 event=audio.dispatch schema=1 run=0 arm=0 ctx=0 cache=9 "
+        "boot=12345678 session=42 codec=4 mode=0 generation=1 capture_generation=2 active=1 " + payload + "\n");
+    CHECK(records.size() == 2);
+    if (records.size() != 2) return;
+    CHECK(records[0].event == "audio.dispatch");
+    CHECK(records[1].text.starts_with("OK SCEPTER_TELEMETRY token=10 kind=6 event=audio.dispatch"));
+    CHECK(records[1].json == payload);
+}
+
 HMI_TEST(device_telemetry_warning_and_error_records_are_never_suppressed)
 {
     hmi::device::TelemetryDecoder decoder;

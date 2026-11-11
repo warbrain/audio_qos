@@ -76,7 +76,7 @@ file(WRITE "${neutral}/include/cudnn_version.h" "#define CUDNN_MAJOR 8\n#define 
 expect_rejected("${neutral}" 13.4 ARCHIVE_CUDA_VERSION 13.4)
 expect_rejected("${multi}" "invalid")
 set(_configuration_check "${_fixture}/reject-cudnn-without-cuda.cmake")
-file(WRITE "${_configuration_check}" "set(WIN32 TRUE)\nset(CMAKE_SIZEOF_VOID_P 8)\nset(HMI_ENABLE_AUDIOCPP_SDK_BUILD ON CACHE BOOL \"\")\nset(HMI_AUDIOCPP_SDK_CUDNN ON CACHE BOOL \"\")\nset(HMI_AUDIOCPP_SDK_CUDA OFF CACHE BOOL \"\")\ninclude(\"${CMAKE_CURRENT_LIST_DIR}/../cmake/AudioSdkTuning.cmake\")\n")
+file(WRITE "${_configuration_check}" "cmake_minimum_required(VERSION 3.24)\nset(WIN32 TRUE)\nset(CMAKE_SIZEOF_VOID_P 8)\nset(HMI_ENABLE_AUDIOCPP_SDK_BUILD ON CACHE BOOL \"\")\nset(HMI_AUDIOCPP_SDK_CUDNN ON CACHE BOOL \"\")\nset(HMI_AUDIOCPP_SDK_CUDA OFF CACHE BOOL \"\")\ninclude(\"${CMAKE_CURRENT_LIST_DIR}/../cmake/AudioSdkTuning.cmake\")\n")
 execute_process(COMMAND "${CMAKE_COMMAND}" -P "${_configuration_check}"
   RESULT_VARIABLE _exit OUTPUT_VARIABLE _output ERROR_VARIABLE _errors)
 if(_exit EQUAL 0 OR NOT "${_output}${_errors}" MATCHES "HMI_AUDIOCPP_SDK_CUDNN requires HMI_AUDIOCPP_SDK_CUDA=ON")
@@ -85,7 +85,7 @@ endif()
 math(EXPR _checks "${_checks} + 1")
 file(MAKE_DIRECTORY "${_fixture}/modules")
 file(WRITE "${_fixture}/modules/FindCUDAToolkit.cmake" "set(CUDAToolkit_FOUND TRUE)\nset(CUDAToolkit_VERSION 13.4.92)\n")
-file(WRITE "${_configuration_check}" "set(WIN32 TRUE)\nset(CMAKE_SIZEOF_VOID_P 8)\nset(HMI_ENABLE_AUDIOCPP_SDK_BUILD ON CACHE BOOL \"\")\nset(HMI_AUDIOCPP_SDK_CUDNN ON CACHE BOOL \"\")\nset(HMI_AUDIOCPP_SDK_CUDA ON CACHE BOOL \"\")\nset(HMI_CUDNN_CUDA_VERSION 12.9 CACHE STRING \"\")\nset(CMAKE_MODULE_PATH \"${_fixture}/modules\")\ninclude(\"${CMAKE_CURRENT_LIST_DIR}/../cmake/AudioSdkTuning.cmake\")\n")
+file(WRITE "${_configuration_check}" "cmake_minimum_required(VERSION 3.24)\nset(WIN32 TRUE)\nset(CMAKE_SIZEOF_VOID_P 8)\nset(HMI_ENABLE_AUDIOCPP_SDK_BUILD ON CACHE BOOL \"\")\nset(HMI_AUDIOCPP_SDK_CUDNN ON CACHE BOOL \"\")\nset(HMI_AUDIOCPP_SDK_CUDA ON CACHE BOOL \"\")\nset(HMI_CUDNN_CUDA_VERSION 12.9 CACHE STRING \"\")\nset(CMAKE_MODULE_PATH \"${_fixture}/modules\")\ninclude(\"${CMAKE_CURRENT_LIST_DIR}/../cmake/AudioSdkTuning.cmake\")\n")
 execute_process(COMMAND "${CMAKE_COMMAND}" -P "${_configuration_check}"
   RESULT_VARIABLE _exit OUTPUT_VARIABLE _output ERROR_VARIABLE _errors)
 if(_exit EQUAL 0 OR NOT "${_output}${_errors}" MATCHES "cuDNN CUDA version 12.9 does not match selected toolkit 13.4")

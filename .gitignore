@@ -17,6 +17,10 @@
 **/physical-run*/
 **/scene-run*/
 **/models/
+!hmi/native-console/3rd_party/native/source/src/models/
+!hmi/native-console/3rd_party/native/source/src/models/**
+!hmi/native-console/3rd_party/native/source/include/engine/models/
+!hmi/native-console/3rd_party/native/source/include/engine/models/**
 *.log
 *.gguf
 *.onnx

@@ -203,17 +203,24 @@ endif()
 add_dependencies(hmi_audio_frontend_probe hmi_runtime)
 if(HMI_BUILD_AUDIOCPP_FROM_SOURCE)
   # SDK graph verification stays separate from the host and its C ABI facade.
-  add_executable(hmi_hgtcrn_reference_probe EXCLUDE_FROM_ALL
+  # Some SDK snapshots do not ship this optional diagnostics-only probe.
+  set(_hmi_hgtcrn_reference_probe
     "${HMI_AUDIOCPP_SOURCE_ROOT}/tools/diagnostics/hgtcrn_reference_probe.cpp")
-  target_link_libraries(hmi_hgtcrn_reference_probe PRIVATE engine_runtime)
-  target_compile_definitions(hmi_hgtcrn_reference_probe PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
-  set_target_properties(hmi_hgtcrn_reference_probe PROPERTIES
-    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/audio-sdk/bin/$<CONFIG>")
-  if(MSVC)
-    target_compile_options(hmi_hgtcrn_reference_probe PRIVATE /W4 /permissive- /utf-8)
+  if(EXISTS "${_hmi_hgtcrn_reference_probe}")
+    add_executable(hmi_hgtcrn_reference_probe EXCLUDE_FROM_ALL
+      "${_hmi_hgtcrn_reference_probe}")
+    target_link_libraries(hmi_hgtcrn_reference_probe PRIVATE engine_runtime)
+    target_compile_definitions(hmi_hgtcrn_reference_probe PRIVATE NOMINMAX WIN32_LEAN_AND_MEAN)
+    set_target_properties(hmi_hgtcrn_reference_probe PROPERTIES
+      CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+      RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/audio-sdk/bin/$<CONFIG>")
+    if(MSVC)
+      target_compile_options(hmi_hgtcrn_reference_probe PRIVATE /W4 /permissive- /utf-8)
+    endif()
+    add_dependencies(hmi_audio_frontend_probe hmi_hgtcrn_reference_probe)
+  else()
+    message(STATUS "Optional H-GTCRN reference probe source is absent; skipping its target")
   endif()
-  add_dependencies(hmi_audio_frontend_probe hmi_hgtcrn_reference_probe)
 endif()
 add_dependencies(hmi_app_startup_probe hmi_runtime)
 add_dependencies(hmi_cudnn_kernel_probe hmi_runtime)

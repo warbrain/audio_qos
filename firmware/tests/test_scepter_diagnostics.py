@@ -131,6 +131,7 @@ int main(void) {
         "audio.owner_timing": (1, 17),
         "audio.nlms": (1, 46),
         "audio.wiener": (1, 18),
+        "audio.dispatch": (1, 17),
     }
     assert len(rows) == sum(count for _, count in expected.values())
     for event, (schema, count) in expected.items():

@@ -80,6 +80,32 @@ bool identity_for(std::string_view family, unsigned expected_parts, unsigned par
         if (const auto *parts = payload.find("parts"); parts && !exact_unsigned(parts, expected_parts)) return false;
         for (const char *name : {"event", "schema", "boot_id"}) identity.emplace(name, *payload.find(name));
     }
+    else if (family == "SCEPTER_TELEMETRY")
+    {
+        if (expected_parts != 17 || !exact_text(payload.find("event"), "audio.dispatch") ||
+            !exact_unsigned(payload.find("schema"), 1) || !boot_value(payload.find("boot_id")) ||
+            !exact_unsigned(payload.find("part"), part)) return false;
+        std::uint32_t role = 0, mode = 0;
+        if (!unsigned_value(payload.find("role"), role) || role != 0 ||
+            !unsigned_value(payload.find("m"), mode) || mode > 5 ||
+            !unsigned_identity(payload, "role", identity) ||
+            !unsigned_identity(payload, "session_id", identity) ||
+            !unsigned_identity(payload, "seq", identity) ||
+            !unsigned_identity(payload, "m", identity)) return false;
+        const auto *codec = payload.find("c");
+        if (!codec) return false;
+        if (const auto *number = std::get_if<double>(&codec->data))
+        {
+            if (!std::isfinite(*number) || std::floor(*number) != *number ||
+                (*number != 3.0 && *number != 4.0 && *number != 5.0)) return false;
+        }
+        else if (!std::holds_alternative<std::nullptr_t>(codec->data)) return false;
+        identity.emplace("c", *codec);
+        if (const auto *parts = payload.find("part_count");
+            parts && !exact_unsigned(parts, expected_parts)) return false;
+        for (const char *name : {"event", "schema", "boot_id"})
+            identity.emplace(name, *payload.find(name));
+    }
     else if (family == "DONGLE_TELEMETRY_V2")
     {
         if (expected_parts != 14 || !exact_text(payload.find("e"), "dongle.diag") ||

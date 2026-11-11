@@ -32,6 +32,21 @@ namespace
 {
 using Clock = std::chrono::steady_clock;
 
+bool contains_header_token(std::string_view header, std::string_view expected)
+{
+    std::size_t position = 0;
+    while (position < header.size())
+    {
+        while (position < header.size() && (header[position] == ' ' || header[position] == '\t')) ++position;
+        const auto end = header.find_first_of(" \t", position);
+        const auto token = header.substr(position, end == std::string_view::npos ? end : end - position);
+        if (token == expected) return true;
+        if (end == std::string_view::npos) break;
+        position = end;
+    }
+    return false;
+}
+
 std::int64_t epoch_ms()
 {
     return std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -217,10 +232,16 @@ bool matches(const Command &command, const TelemetryRecord &record)
     const auto response_at = line.find(prefix);
     const auto json_at = record.json.empty() ? std::string::npos : line.rfind(record.json);
     if (response_at == std::string::npos || json_at == std::string::npos ||
-        response_at + prefix.size() > json_at ||
-        !std::all_of(line.begin() + static_cast<std::ptrdiff_t>(response_at + prefix.size()),
-                     line.begin() + static_cast<std::ptrdiff_t>(json_at),
-                     [](char c) { return c == ' ' || c == '\t'; })) return false;
+        response_at + prefix.size() > json_at) return false;
+    const auto reply_header = std::string_view(line).substr(response_at + prefix.size(),
+        json_at - (response_at + prefix.size()));
+    if (command.name == "SCEPTER_TELEMETRY")
+    {
+        if (!contains_header_token(reply_header, "kind=" + std::to_string(command.stage)) ||
+            !contains_header_token(reply_header, "event=audio.dispatch")) return false;
+    }
+    else if (!std::all_of(reply_header.begin(), reply_header.end(),
+                          [](char c) { return c == ' ' || c == '\t'; })) return false;
     util::json::Value payload;
     if (!util::json::parse(record.json, payload)) return false;
     const auto *part = payload.find("part");
@@ -311,6 +332,8 @@ struct Telemetry::Impl
         const int first = node.endpoint.role == "scepter" ? 0 : 2;
         append_group(node, "PERF_SNAPSHOT", 13, first);
         append_group(node, "PERF_SNAPSHOT", 13, first + 1);
+        if (node.endpoint.role == "scepter")
+            append_group(node, "SCEPTER_TELEMETRY", 17, 6);
         if (node.endpoint.role == "dongle") append_group(node, "DONGLE_TELEMETRY_V2", 14);
         node.next_poll = Clock::now() + std::chrono::seconds(options.poll_interval_seconds);
     }
@@ -487,7 +510,8 @@ struct Telemetry::Impl
 
     void validate_snapshot(Connection &node, const Command &command, const TelemetryRecord &record)
     {
-        if (command.name != "TELEMETRY" && command.name != "DONGLE_TELEMETRY_V2") return;
+        if (command.name != "TELEMETRY" && command.name != "DONGLE_TELEMETRY_V2" &&
+            command.name != "SCEPTER_TELEMETRY") return;
         const auto status = node.snapshot.observe(command.name, command.token, command.group_size,
             static_cast<unsigned>(command.part), record.json);
         if (status == SnapshotStatus::Incomplete) return;

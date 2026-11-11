@@ -1,6 +1,6 @@
 # CytoScepter Scepter
 
-本工程是双麦系统的手持发送端，版本为 0.5.22 / ESP-IDF 5.5.6，目标芯片为 ESP32-S3-N16R8。本版将编码帧异步派发改为预分配 PCM 缓冲池和 SPSC 槽位编号环形队列，保留两帧排队上限，不再通过 FreeRTOS 队列复制整块 PCM；不改变编解码器、DSP、无线帧或 NVS 设置。0.5.21 增加 Scepter Opus 编码遥测；0.5.19 起每个五秒 capture-health 统计窗附加左右实际固定增益标签；空间模式 5（左右声道各自独立 Wiener）和其 Wiener 计时沿用 0.5.17 实现。保留双麦板自己的 PDM、LCD、按键、触摸、滚轮、IMU、电池、马达和 RGB 实现。
+本工程是双麦系统的手持发送端，版本为 0.5.23 / ESP-IDF 5.5.6，目标芯片为 ESP32-S3-N16R8。本版新增 `SCEPTER_TELEMETRY <token> 6 <part>` 查询，共 17 段返回 `audio.dispatch` 的队列等待、帧龄、队列满、槽位失效/不可用、事件丢失、高水位和迟到事件计数。版本 0.5.22 起使用预分配 PCM 缓冲池和 SPSC 槽位编号环形队列，保留两帧排队上限，避免通过 FreeRTOS 队列复制整块 PCM；本版不改变编解码器、DSP、无线帧或 NVS 设置。0.5.21 增加 Scepter Opus 编码遥测；0.5.19 起每个五秒 capture-health 统计窗附加左右实际固定增益标签；空间模式 5（左右声道各自独立 Wiener）和其 Wiener 计时沿用 0.5.17 实现。保留双麦板自己的 PDM、LCD、按键、触摸、滚轮、IMU、电池、马达和 RGB 实现。
 
 **本次没有修改 GPIO 或硬件外设配置。** NewPCB 单麦板和当前双麦板电路不同，不能交叉刷写镜像。
 
@@ -141,7 +141,7 @@ PDM 模式不使用 BCLK、LRCLK/WS，硬件没有独立麦克风 RST/EN。
 
 ## 日志检查
 
-- 启动：fw=0.5.22、codec=G722 stereo、air packet=400B、rate=5.5 Mbps、target=232ms、window=16。
+- 启动：fw=0.5.23、codec=G722 stereo、air packet=400B、rate=5.5 Mbps、target=232ms、window=16。
 - 音频分析日志应显示 `vad=disabled`，且发送速率在静音时仍约为 50 fps。
 - 正常发送：约 50 fps，观察 normal MAC ok/fail、deadline/queue drop。
 - 恢复发送：观察 NACK、repair queued/submitted/ok/fail/cancelled、budget_drop、cache miss/expired。

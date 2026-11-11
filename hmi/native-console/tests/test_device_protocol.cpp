@@ -28,6 +28,13 @@ std::string resource(unsigned part, unsigned sequence = 239)
         (part == 0 ? ",\"parts\":10" : "") + ",\"value\":" + std::to_string(part * 10U) + "}";
 }
 
+std::string dispatch(unsigned part, unsigned sequence = 77)
+{
+    return "{\"event\":\"audio.dispatch\",\"schema\":1,\"boot_id\":\"2e4523d4\",\"role\":0,\"session_id\":42,\"seq\":" +
+        std::to_string(sequence) + ",\"part\":" + std::to_string(part) +
+        ",\"c\":4,\"m\":0" + (part == 0 ? ",\"part_count\":17" : "") + "}";
+}
+
 std::string changed(std::string_view json, std::string key, Value value)
 {
     Value parsed;
@@ -100,6 +107,49 @@ HMI_TEST(device_protocol_checks_resource_window_boot_role_and_completion)
         CHECK(validator.observe("TELEMETRY", 3, 10, 0, resource(0)) == SnapshotStatus::Incomplete);
         CHECK(validator.observe("TELEMETRY", 3, 10, 1, changed(resource(1), key, value)) == SnapshotStatus::Mismatch);
     }
+}
+
+HMI_TEST(device_protocol_accepts_complete_ordered_scepter_dispatch_snapshot)
+{
+    SnapshotValidator validator;
+    for (unsigned part = 0; part < 17; ++part)
+        CHECK(validator.observe("SCEPTER_TELEMETRY", 41, 17, part, dispatch(part)) ==
+              (part == 16 ? SnapshotStatus::Complete : SnapshotStatus::Incomplete));
+    CHECK(validator.observe("SCEPTER_TELEMETRY", 41, 17, 16, dispatch(16)) == SnapshotStatus::Mismatch);
+}
+
+HMI_TEST(device_protocol_accepts_unknown_codec_dispatch_snapshot)
+{
+    SnapshotValidator validator;
+    auto first = dispatch(0);
+    first.replace(first.find("\"c\":4"), 5, "\"c\":null");
+    auto second = dispatch(1);
+    second.replace(second.find("\"c\":4"), 5, "\"c\":null");
+    CHECK(validator.observe("SCEPTER_TELEMETRY", 42, 17, 0, first) == SnapshotStatus::Incomplete);
+    CHECK(validator.observe("SCEPTER_TELEMETRY", 42, 17, 1, second) == SnapshotStatus::Incomplete);
+}
+
+HMI_TEST(device_protocol_rejects_mixed_scepter_dispatch_identity)
+{
+    const std::pair<std::string, Value> changes[] = {
+        {"boot_id", Value("aabbccdd")},
+        {"session_id", Value(43.0)}, {"seq", Value(78.0)},
+        {"c", Value(5.0)}, {"m", Value(3.0)}};
+    for (const auto &[key, value] : changes)
+    {
+        SnapshotValidator validator;
+        CHECK(validator.observe("SCEPTER_TELEMETRY", 9, 17, 0, dispatch(0)) == SnapshotStatus::Incomplete);
+        CHECK(validator.observe("SCEPTER_TELEMETRY", 9, 17, 1,
+            changed(dispatch(1), key, value)) == SnapshotStatus::Mismatch);
+    }
+    SnapshotValidator validator;
+    CHECK(validator.observe("SCEPTER_TELEMETRY", 10, 17, 0, dispatch(0)) == SnapshotStatus::Incomplete);
+    CHECK(validator.observe("SCEPTER_TELEMETRY", 10, 17, 1,
+        without(dispatch(1), "c")) == SnapshotStatus::Invalid);
+    SnapshotValidator invalid_role;
+    CHECK(invalid_role.observe("SCEPTER_TELEMETRY", 11, 17, 0, dispatch(0)) == SnapshotStatus::Incomplete);
+    CHECK(invalid_role.observe("SCEPTER_TELEMETRY", 11, 17, 1,
+        changed(dispatch(1), "role", Value(1.0))) == SnapshotStatus::Invalid);
 }
 
 HMI_TEST(device_protocol_requires_order_and_new_token_part_zero)
