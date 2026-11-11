@@ -843,6 +843,8 @@ static uint32_t s_owner_timing_event_drops;
 static uint32_t s_frame_dispatch_queue_full, s_frame_dispatch_invalidated;
 static uint32_t s_frame_dispatch_unavailable, s_frame_dispatch_highwater, s_frame_dispatch_late_events;
 static uint32_t s_frame_dispatch_late_epoch, s_frame_dispatch_late_attribution;
+static uint32_t s_frame_dispatch_late_inactive, s_frame_dispatch_late_identity;
+static uint32_t s_frame_dispatch_late_before_window;
 /* Only the owner modifies its aggregate. Background gets a complete value
  * under a short copy lock; it cannot delay or reset DSP/encoder histories. */
 static mic_pipeline_telemetry_t s_pipeline_window, s_pipeline_report;
@@ -1106,6 +1108,9 @@ static void mic_pipeline_close_window(uint64_t now_us)
     snapshot.dispatch_late_events=s_frame_dispatch_late_events;
     snapshot.dispatch_late_epoch=s_frame_dispatch_late_epoch;
     snapshot.dispatch_late_attribution=s_frame_dispatch_late_attribution;
+    snapshot.dispatch_late_inactive=s_frame_dispatch_late_inactive;
+    snapshot.dispatch_late_identity=s_frame_dispatch_late_identity;
+    snapshot.dispatch_late_before_window=s_frame_dispatch_late_before_window;
     s_pipeline_report=snapshot;s_pipeline_report_ready=true;
     memset(s_pipeline_wiener_histogram,0,sizeof(s_pipeline_wiener_histogram));
     portEXIT_CRITICAL(&s_pipeline_lock);
@@ -1225,18 +1230,25 @@ static void mic_pipeline_record_owner_timing_event(const mic_owner_timing_event_
         dual_end_runtime_record_outcome(DUAL_END_STAGE_MIC_PIPELINE,
             event->timing.codec,event->timing.session_id,event->work_us,
             event->timing.outcome);
-    if (!s_pipeline_window_active ||
-        s_pipeline_window.boot_id!=event->boot_id ||
+    uint32_t *late_reason = NULL;
+    if (!s_pipeline_window_active) {
+        late_reason = &s_frame_dispatch_late_inactive;
+    } else if (s_pipeline_window.boot_id!=event->boot_id ||
         s_pipeline_window.session_id!=event->timing.session_id ||
         !s_pipeline_window.codec_known ||
         s_pipeline_window.codec!=event->timing.codec ||
         s_pipeline_window.mode!=event->spatial_mode ||
         s_pipeline_window.generation!=event->spatial_generation ||
-        s_pipeline_window.capture_generation!=event->capture_generation ||
-        (event->enqueued_us && event->enqueued_us<s_pipeline_window.start_us)) {
+        s_pipeline_window.capture_generation!=event->capture_generation) {
+        late_reason = &s_frame_dispatch_late_identity;
+    } else if (event->enqueued_us && event->enqueued_us<s_pipeline_window.start_us) {
+        late_reason = &s_frame_dispatch_late_before_window;
+    }
+    if (late_reason) {
         portENTER_CRITICAL(&s_pipeline_lock);
         if (s_frame_dispatch_late_events!=UINT32_MAX) ++s_frame_dispatch_late_events;
         if (s_frame_dispatch_late_attribution!=UINT32_MAX) ++s_frame_dispatch_late_attribution;
+        if (*late_reason!=UINT32_MAX) ++*late_reason;
         portEXIT_CRITICAL(&s_pipeline_lock);
         return;
     }

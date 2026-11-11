@@ -418,9 +418,12 @@ size_t mic_dispatch_telemetry_format(const mic_pipeline_telemetry_t *record,
     } else switch (part) {
     case 0: fields = snprintf(tail, left, ",\"part_count\":%u}", MIC_DISPATCH_TELEMETRY_PARTS); break;
     case 1: fields = snprintf(tail, left, ",\"sampled_us\":\"%" PRIu64 "\"}", record->sampled_us); break;
-    case 11: fields = snprintf(tail, left, ",\"queue_full\":%" PRIu32 "}", record->dispatch_queue_full); break;
-    case 12: fields = snprintf(tail, left, ",\"invalidated\":%" PRIu32 "}", record->dispatch_invalidated); break;
-    case 13: fields = snprintf(tail, left, ",\"unavailable\":%" PRIu32 "}", record->dispatch_unavailable); break;
+    case 11: fields = snprintf(tail, left, ",\"queue_full\":%" PRIu32 ",\"li\":%" PRIu32 "}",
+        record->dispatch_queue_full, record->dispatch_late_inactive); break;
+    case 12: fields = snprintf(tail, left, ",\"invalidated\":%" PRIu32 ",\"lx\":%" PRIu32 "}",
+        record->dispatch_invalidated, record->dispatch_late_identity); break;
+    case 13: fields = snprintf(tail, left, ",\"unavailable\":%" PRIu32 ",\"lb\":%" PRIu32 "}",
+        record->dispatch_unavailable, record->dispatch_late_before_window); break;
     case 14: fields = snprintf(tail, left, ",\"event_lost\":%" PRIu32 "}", record->dispatch_event_lost); break;
     case 15: fields = snprintf(tail, left, ",\"queue_hi\":%" PRIu32 ",\"le\":%" PRIu32 "}",
         record->dispatch_queue_highwater, record->dispatch_late_epoch); break;

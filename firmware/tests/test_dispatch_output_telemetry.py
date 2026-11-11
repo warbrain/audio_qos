@@ -34,6 +34,7 @@ int main(void) {
     r.dispatch_queue_full=r.dispatch_invalidated=r.dispatch_unavailable=
         r.dispatch_event_lost=r.dispatch_queue_highwater=r.dispatch_late_events=
         r.dispatch_late_epoch=r.dispatch_late_attribution=UINT32_MAX;
+    r.dispatch_late_inactive=r.dispatch_late_identity=r.dispatch_late_before_window=UINT32_MAX;
     r.capture_health.output=(mic_output_health_t){.samples=UINT64_MAX,
         .sum_sq={UINT64_MAX,UINT64_MAX},.limited_frames=UINT64_MAX,
         .peak={UINT32_MAX,UINT32_MAX}};
@@ -80,6 +81,8 @@ int main(void) {
     output = {key: value for row in rows[41:] for key, value in row.items()}
     assert dispatch["qw_us"] == str(2**64 - 1) and dispatch["queue_full"] == 2**32 - 1
     assert dispatch["le"] == 2**32 - 1 and dispatch["la"] == 2**32 - 1
+    assert dispatch["li"] == 2**32 - 1 and dispatch["lx"] == 2**32 - 1
+    assert dispatch["lb"] == 2**32 - 1
     assert unknown["qw_lo"] is None and unknown["fa_hi"] is None
     assert output["l_rms"] is None and output["l_peak"] is None and output["limited_pct"] is None
 
@@ -133,6 +136,8 @@ static unsigned records,locked;
 static int s_pipeline_lock;
 static uint32_t s_frame_dispatch_late_events;
 static uint32_t s_frame_dispatch_late_epoch,s_frame_dispatch_late_attribution;
+static uint32_t s_frame_dispatch_late_inactive,s_frame_dispatch_late_identity;
+static uint32_t s_frame_dispatch_late_before_window;
 #define DUAL_END_STAGE_MIC_PIPELINE 1
 #define portENTER_CRITICAL(p) ((void)(p),assert(!locked),++locked)
 #define portEXIT_CRITICAL(p) ((void)(p),assert(locked),--locked)
@@ -153,9 +158,18 @@ int main(void){
  e.dispatch_epoch=7;e.timing.session_id=99;mic_pipeline_record_owner_timing_event(&e);
   assert(s_frame_dispatch_late_events==2&&s_frame_dispatch_late_epoch==1&&
     s_frame_dispatch_late_attribution==1&&s_pipeline_window.dispatch_queue_wait.n==1);
+ assert(s_frame_dispatch_late_identity==1&&!s_frame_dispatch_late_inactive&&
+    !s_frame_dispatch_late_before_window);
  e.timing.session_id=2;e.enqueued_us=149;mic_pipeline_record_owner_timing_event(&e);
   assert(s_frame_dispatch_late_events==3&&s_frame_dispatch_late_epoch==1&&
     s_frame_dispatch_late_attribution==2&&s_pipeline_window.dispatch_queue_wait.n==1);
+ assert(s_frame_dispatch_late_before_window==1&&s_frame_dispatch_late_identity==1);
+ s_pipeline_window_active=false;e.enqueued_us=150;
+ mic_pipeline_record_owner_timing_event(&e);
+ assert(s_frame_dispatch_late_events==4&&s_frame_dispatch_late_attribution==3&&
+    s_frame_dispatch_late_inactive==1&&s_frame_dispatch_late_identity==1&&
+    s_frame_dispatch_late_before_window==1);
+ s_pipeline_window_active=true;
  e.timing.session_id=2;e.enqueued_us=1300;e.control_ready_us=1100;e.captured_us=6000;
  mic_pipeline_record_owner_timing_event(&e);
  assert(s_pipeline_window.dispatch_queue_wait.n==1&&s_pipeline_window.dispatch_control_wait.n==1);

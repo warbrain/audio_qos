@@ -117,6 +117,8 @@ static uint32_t s_pipeline_report_sequence,s_pipeline_windows_lost;
 static uint32_t s_frame_dispatch_queue_full,s_frame_dispatch_invalidated,s_frame_dispatch_unavailable;
 static uint32_t s_owner_timing_event_drops,s_frame_dispatch_highwater,s_frame_dispatch_late_events;
 static uint32_t s_frame_dispatch_late_epoch,s_frame_dispatch_late_attribution;
+static uint32_t s_frame_dispatch_late_inactive,s_frame_dispatch_late_identity;
+static uint32_t s_frame_dispatch_late_before_window;
 static mic_audio_diagnostics_snapshot_t s_pipeline_diagnostics_cache;
 static bool s_pipeline_diagnostics_cache_ready;
 static mic_wiener_timing_histogram_t s_pipeline_wiener_histogram[2];
@@ -138,11 +140,15 @@ int main(void){
  s_spatial_telemetry=(dual_end_spatial_telemetry_t){.boot_id=7,.session_id=1,.codec=3,.codec_known=true,.applied=0,.generation=1};
      s_config[2]=16;s_config[3]=16;
  record(1000000,10,0,30,NULL);record(2000000,20,0,40,NULL);
+ s_frame_dispatch_late_inactive=3;s_frame_dispatch_late_identity=4;
+ s_frame_dispatch_late_before_window=5;
  assert(!s_pipeline_report_ready&&s_pipeline_window.q.n==2&&s_pipeline_window.w.us==70&&s_pipeline_window.d.us==30);
  s_spatial_telemetry.session_id=2;s_spatial_telemetry.codec=4;s_spatial_telemetry.applied=1;++s_spatial_telemetry.generation;
  record(3000000,30,40,100,NULL);
  assert(s_pipeline_report_ready&&s_pipeline_report.session_id==1&&s_pipeline_report.mode==0&&s_pipeline_report.w.us==70);
  assert(s_pipeline_report.diag_q==3&&s_pipeline_report.diag_b==4&&s_pipeline_report.fft_us==900000);
+ assert(s_pipeline_report.dispatch_late_inactive==3&&s_pipeline_report.dispatch_late_identity==4&&
+        s_pipeline_report.dispatch_late_before_window==5);
  assert(s_pipeline_window.session_id==2&&s_pipeline_window.mode==1&&s_pipeline_window.w.us==100&&s_pipeline_window.s.us==40);
  record(8000000,40,50,120,NULL);assert(s_pipeline_report.session_id==2&&s_pipeline_report.w.us==220&&s_pipeline_report.s.us==90);
  assert(s_pipeline_report.win_lost==1&&s_pipeline_report.sequence==2&&!s_pipeline_window_active);
