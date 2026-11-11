@@ -28,6 +28,8 @@ struct VoiceOptions
     double preview_interval_seconds = 1.0;
     bool refine = true;
     int maximum_audio_seconds = 30;
+    // Zero uses the model's own default; positive values bound Qwen's KV cache.
+    int asr_max_new_tokens = 0;
     bool vad_enabled = true;
     bool denoise_enabled = false;
     // Default off: on 20 mm 16 kHz input the released masking_on_noisy model

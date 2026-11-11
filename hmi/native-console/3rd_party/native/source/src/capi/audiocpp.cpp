@@ -55,7 +55,33 @@ namespace rt = engine::runtime;
 
 namespace {
 
-thread_local std::string g_last_error;
+// Keep exception reporting usable when the exception is itself std::bad_alloc.
+// guard() is noexcept, so storing an error in std::string here could allocate
+// again and terminate while handling the original allocation failure.
+constexpr size_t kLastErrorCapacity = 2048;
+thread_local char g_last_error[kLastErrorCapacity] = {};
+
+void set_last_error(const char * message) noexcept {
+    if (message == nullptr) {
+        g_last_error[0] = '\0';
+        return;
+    }
+    size_t index = 0;
+    while (index + 1 < kLastErrorCapacity && message[index] != '\0') {
+        g_last_error[index] = message[index];
+        ++index;
+    }
+    g_last_error[index] = '\0';
+}
+
+class AllocationStageError final : public std::bad_alloc {
+public:
+    explicit AllocationStageError(const char * stage) noexcept : stage_(stage) {}
+    const char * what() const noexcept override { return stage_; }
+
+private:
+    const char * stage_;
+};
 
 const char * const kEmptyString = "";
 
@@ -104,29 +130,29 @@ void load_library_backends() {
 template <typename Fn>
 audiocpp_status guard(Fn && fn, audiocpp_status runtime_status = AUDIOCPP_ERR_RUNTIME) noexcept {
     try {
-        g_last_error.clear();
+        set_last_error(nullptr);
         return fn();
     } catch (const std::bad_alloc & e) {
-        g_last_error = e.what();
+        set_last_error(e.what());
         return AUDIOCPP_ERR_OUT_OF_MEMORY;
     } catch (const std::invalid_argument & e) {
-        g_last_error = e.what();
+        set_last_error(e.what());
         return AUDIOCPP_ERR_INVALID_ARGUMENT;
     } catch (const rt::InvalidRequestError & e) {
         /* Caller input such as a malformed option value: not a load or runtime failure. */
-        g_last_error = e.what();
+        set_last_error(e.what());
         return AUDIOCPP_ERR_INVALID_ARGUMENT;
     } catch (const std::exception & e) {
-        g_last_error = e.what();
+        set_last_error(e.what());
         return runtime_status;
     } catch (...) {
-        g_last_error = "unknown error";
+        set_last_error("unknown error");
         return runtime_status;
     }
 }
 
 audiocpp_status fail(audiocpp_status status, const char * message) noexcept {
-    g_last_error = message;
+    set_last_error(message);
     return status;
 }
 
@@ -383,7 +409,7 @@ const char * audiocpp_build_version(void) {
 }
 
 const char * audiocpp_last_error(void) {
-    return g_last_error.c_str();
+    return g_last_error;
 }
 
 const char * audiocpp_status_string(audiocpp_status status) {
@@ -1574,7 +1600,12 @@ audiocpp_status audiocpp_stream_finish(audiocpp_session * session, audiocpp_resu
         engine::debug::DiagnosticOperation operation("stream_finish", session->family,
             session->diagnostic_request_id, session->diagnostic_segment_index, session->diagnostic_attempt,
             session->diagnostic_stage, session->diagnostic_revision);
-        auto handle = std::make_unique<audiocpp_result>();
+        std::unique_ptr<audiocpp_result> handle;
+        try {
+            handle = std::make_unique<audiocpp_result>();
+        } catch (const std::bad_alloc &) {
+            throw AllocationStageError("audiocpp_stream_finish allocation failed while creating result handle");
+        }
         handle->result = session->streaming().finish_stream();
         *out_result = handle.release();
         return AUDIOCPP_OK;

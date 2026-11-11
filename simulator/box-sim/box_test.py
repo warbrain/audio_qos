@@ -148,7 +148,7 @@ def main() -> int:
     if args.out_device < 0:
         args.out_device = find_device("US-4x4HR", True, 48000)
     if args.in_device < 0:
-        args.in_device = find_device("WhisPrompt", False, 48000)
+        args.in_device = find_device("Audio QoS", False, 48000)
     print(f"out device {args.out_device}: {sd.query_devices(args.out_device)['name']}")
     print(f"in  device {args.in_device}: {sd.query_devices(args.in_device)['name']}")
 

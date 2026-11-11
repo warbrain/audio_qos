@@ -16,7 +16,7 @@ code tracks a quiet box, a noisy room or a hot microphone without retuning.
 
 Usage:
     python adaptive_frontend.py --wav D:\path\file.wav [--state]
-    python adaptive_frontend.py --dir <scene-directory>
+    python adaptive_frontend.py --dir .\scenes
 """
 from __future__ import annotations
 

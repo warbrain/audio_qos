@@ -98,10 +98,8 @@ def scan_file(path: str, limit: int) -> list[tuple[int, str, int]]:
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__,
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument(
-        "--root",
-        default=str(Path(__file__).resolve().parents[2] / "firmware" / "whisprompt-fw"),
-    )
+    default_root = Path(__file__).resolve().parents[2] / "firmware"
+    parser.add_argument("--root", default=str(default_root))
     parser.add_argument("--limit", type=int, default=256)
     parser.add_argument("--top", type=int, default=0)
     args = parser.parse_args()

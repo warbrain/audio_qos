@@ -7,6 +7,35 @@
 #include "../src/app/voice_runtime.cpp"
 #undef VoiceRuntime
 
+HMI_TEST(asr_final_normalization_caps_gain_to_one_db_peak_headroom)
+{
+    bool peak_limited = false;
+    float rms_requested_gain = 1.0f;
+    const auto gain = hmi::app::asr_normalization_gain({0.010, 0.200f}, true, &peak_limited, &rms_requested_gain);
+    CHECK(peak_limited);
+    CHECK(rms_requested_gain > 5.0f && rms_requested_gain < 5.1f);
+    CHECK(gain > 4.45f && gain < 4.46f);
+    CHECK(0.200f * gain <= 0.8913f);
+}
+
+HMI_TEST(asr_final_normalization_keeps_rms_target_when_peak_has_headroom)
+{
+    bool peak_limited = true;
+    float rms_requested_gain = 1.0f;
+    const auto gain = hmi::app::asr_normalization_gain({0.015, 0.050f}, true, &peak_limited, &rms_requested_gain);
+    CHECK(!peak_limited);
+    CHECK(gain > 3.33f && gain < 3.35f);
+    CHECK(gain == rms_requested_gain);
+}
+
+HMI_TEST(asr_final_normalization_keeps_existing_gain_when_peak_guard_candidate_is_off)
+{
+    bool peak_limited = true;
+    const auto gain = hmi::app::asr_normalization_gain({0.010, 0.200f}, false, &peak_limited);
+    CHECK(!peak_limited);
+    CHECK(gain > 5.0f && gain < 5.02f);
+}
+
 HMI_TEST(speech_wait_observes_fast_cancellation_that_already_finished_the_engine)
 {
     for (const unsigned reason : {1U, 2U, 3U})
@@ -578,12 +607,12 @@ HMI_TEST(dictation_unmatched_transcript_uses_one_caret_text_action)
 {
     auto rules = hmi::intent::default_rules();
     hmi::app::Pending pending;
-    pending.transcript.text = "  请帮我检查语音助手的输入框 ＡＢＣ。  ";
+    pending.transcript.text = "  请帮我检查 Codex 的输入框 ＡＢＣ。  ";
     pending.transcript.confidence = -1.0f;
     pending.released_at = 1000;
     pending.target.pid = 42;
     pending.target.native_window = 100;
-    pending.target.process = "VoiceAssistant.exe";
+    pending.target.process = "Codex.exe";
     pending.window = reinterpret_cast<HWND>(pending.target.native_window);
     const auto job = hmi::app::transcript_job(rules, pending, 2000);
     CHECK(job.event.rule == "Dictation");

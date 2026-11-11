@@ -49,8 +49,10 @@ struct Options
     std::wstring tts_cache;
     double preview_interval_seconds = 1.0;
     double minimum_audio_seconds = -1.0;
+    int asr_max_new_tokens = 0;
     std::string asr_text = "打开计算器";
     std::string expect_text = "计算器";
+    bool expect_text_set = false;
     std::wstring tts_perf_mode;
     std::string tts_text = "你好，这是分段语音合成测试。第一段生成后就可以开始播放，后面的内容会继续生成，不必等待整段文字全部合成。我们现在检查首段等待时间、后续分段速度和缓冲上限。";
     std::filesystem::path pcm;
@@ -108,7 +110,11 @@ Options options(int argc, wchar_t **argv)
         }
         else if (key == L"--tts-text") out.tts_text = option_text(value);
         else if (key == L"--asr-text") out.asr_text = option_text(value);
-        else if (key == L"--expect-text") out.expect_text = option_text(value);
+        else if (key == L"--expect-text")
+        {
+            out.expect_text = option_text(value);
+            out.expect_text_set = true;
+        }
         else if (key == L"--tts-cache")
         {
             if (value != L"0" && value != L"1") throw std::runtime_error("TTS cache must be 0 or 1");
@@ -141,6 +147,13 @@ Options options(int argc, wchar_t **argv)
             out.threads = std::stoi(value, &consumed);
             if (consumed != value.size() || out.threads < 1 || out.threads > 256)
                 throw std::runtime_error("threads must be 1..256");
+        }
+        else if (key == L"--max-tokens")
+        {
+            std::size_t consumed = 0;
+            out.asr_max_new_tokens = std::stoi(value, &consumed);
+            if (consumed != value.size() || out.asr_max_new_tokens < 1 || out.asr_max_new_tokens > 512)
+                throw std::runtime_error("ASR max tokens must be 1..512");
         }
         else if (key == L"--iterations")
         {
@@ -192,11 +205,12 @@ void usage()
 {
     std::printf(
         "Usage: hmi_voice_probe [options]\n"
-        "  --backend auto|cuda|vulkan|cpu --threads 1..256 --iterations 1..20\n"
+        "  --backend auto|cuda|vulkan|cpu --threads 1..256 --iterations 1..20 --max-tokens 1..512\n"
         "  --stream [--preview-interval 0.01..30] [--realtime] | --final-only\n"
         "  --readback-probe (requires --stream --realtime --pcm; cold first-segment PCM, never played)\n"
         "  --prepare-tts (implies --readback-probe; prepare the model after the first real preview)\n"
-        "  --pcm FILE [--pcm-rate 16000|24000] | --asr-text TEXT --expect-text TEXT\n"
+        "  --pcm FILE [--pcm-rate 16000|24000] [--expect-text TEXT] | --asr-text TEXT --expect-text TEXT\n"
+        "  PCM without an explicit expectation passes on a non-empty final transcript; explicit text checks a substring.\n"
         "  --resampler linear|sinc (default: linear; sinc adds an anti-alias low-pass filter)\n"
         "  --minimum-audio-seconds 0..29.9 --save-pcm FILE\n"
         "  --tts-segments | --tts-fast-sink | --tts-muted-playback\n"
@@ -697,6 +711,7 @@ int run(const Options &selected)
     hmi::engine::AsrConfig asr_config;
     asr_config.backend = selected.backend;
     asr_config.threads = selected.threads;
+    asr_config.max_new_tokens = selected.asr_max_new_tokens;
     asr_config.preview_interval_seconds = selected.stream ? selected.preview_interval_seconds : 30.0;
     if (!asr.open(client, asr_config, &error))
     {
@@ -704,8 +719,8 @@ int run(const Options &selected)
         return 3;
     }
     std::printf("PROBE ASR load_ms=%.3f preferred_chunk=%zu\n", elapsed(load_start), asr.preferred_chunk_samples());
-    std::printf("PROBE backend=%s threads=%d sdk_openmp=%d mode=%s preview_interval_s=%.3f realtime_paced=%d\n",
-        asr.statistics().backend.c_str(), selected.threads, HMI_AUDIOCPP_SDK_OPENMP_ENABLED,
+    std::printf("PROBE backend=%s threads=%d max_new_tokens=%d sdk_openmp=%d mode=%s preview_interval_s=%.3f realtime_paced=%d\n",
+        asr.statistics().backend.c_str(), selected.threads, selected.asr_max_new_tokens, HMI_AUDIOCPP_SDK_OPENMP_ENABLED,
         selected.stream ? "prefix_preview_refine" : "final", asr_config.preview_interval_seconds, selected.realtime ? 1 : 0);
     memory("asr_ready");
     int failures = 0;
@@ -849,7 +864,10 @@ int run(const Options &selected)
         }
         const bool preview_due = selected.stream && pcm.size() >=
             static_cast<std::size_t>(std::ceil(selected.preview_interval_seconds * 16000.0));
-        const bool matched = transcript.final && transcript.text.find(selected.expect_text) != std::string::npos &&
+        const bool matches_expected_text = !selected.expect_text_set && !selected.pcm.empty()
+            ? !transcript.text.empty()
+            : transcript.text.find(selected.expect_text) != std::string::npos;
+        const bool matched = transcript.final && matches_expected_text &&
             (!preview_due || !partial.empty()) && (selected.stream || statistics.preview_count == 0);
         std::printf("PROBE %s iteration=%d total_ms=%.3f finish_ms=%.3f confidence=unknown text=%s\n",
                     matched ? "PASS" : "FAIL", iteration, total_ms, finish_ms, transcript.text.c_str());

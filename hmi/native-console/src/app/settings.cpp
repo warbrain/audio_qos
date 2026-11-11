@@ -144,6 +144,9 @@ bool read_settings(const base::Config &config, const std::filesystem::path &base
         read(config, "voice.maximum_audio_seconds", parsed.voice.maximum_audio_seconds);
         if (parsed.voice.maximum_audio_seconds < 1 || parsed.voice.maximum_audio_seconds > 30)
             throw std::runtime_error("voice.maximum_audio_seconds must be 1..30");
+        read(config, "voice.asr_max_new_tokens", parsed.voice.asr_max_new_tokens);
+        if (parsed.voice.asr_max_new_tokens < 0 || parsed.voice.asr_max_new_tokens > 512)
+            throw std::runtime_error("voice.asr_max_new_tokens must be 0..512 (0 uses model default)");
         read(config, "hotkeys.hold", parsed.voice.hotkeys.hold);
         read(config, "hotkeys.toggle", parsed.voice.hotkeys.toggle);
         if (parsed.voice.hotkeys.hold.empty() || parsed.voice.hotkeys.toggle.empty() ||
@@ -206,6 +209,7 @@ bool write_default_settings(const std::filesystem::path &file, const Settings &s
         !set("voice.vad_threshold", settings.voice.vad_threshold) ||
         !set("voice.preview_interval_seconds", settings.voice.preview_interval_seconds) ||
         !set("voice.refine", settings.voice.refine) || !set("voice.maximum_audio_seconds", settings.voice.maximum_audio_seconds) ||
+        !set("voice.asr_max_new_tokens", settings.voice.asr_max_new_tokens) ||
         !set("voice.asr_model", utf8(settings.voice.asr_model)) || !set("voice.tts_model", utf8(settings.voice.tts_model)) ||
         !set("voice.vad_model", utf8(settings.voice.vad_model)) || !set("voice.denoise_model", utf8(settings.voice.denoise_model)) ||
         !set("voice.hgtcrn_model", utf8(settings.voice.hgtcrn_model)) ||

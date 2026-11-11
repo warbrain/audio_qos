@@ -102,6 +102,11 @@ bool start_prefix_stream(const PrefixApi &api, audiocpp_session *session,
     const auto window = std::to_string(config.maximum_audio_seconds);
     if (!api.check(api.request_set_option(request.get(), "audio_chunk_duration_sec", window.c_str()),
                    "set ASR prefix window", error)) return false;
+    if (config.max_new_tokens > 0) {
+        const auto token_limit = std::to_string(config.max_new_tokens);
+        if (!api.check(api.request_set_option(request.get(), "max_tokens", token_limit.c_str()),
+                       "set ASR generation budget", error)) return false;
+    }
     const auto id = std::to_string(request_id);
     const auto update = std::to_string(revision);
     if (!api.check(api.request_set_option(request.get(), "hmi.request_id", id.c_str()), "set ASR request identity", error) ||
@@ -241,7 +246,7 @@ bool AsrSession::open(Client &client, const AsrConfig &config, std::string *erro
     if (!client.ready() || config.model_path.empty() || config.threads < 1 || config.threads > 256 ||
         !std::isfinite(config.preview_interval_seconds) || config.preview_interval_seconds <= 0.0 ||
         config.preview_interval_seconds > 30.0 || config.maximum_audio_seconds < 1 ||
-        config.maximum_audio_seconds > 30)
+        config.maximum_audio_seconds > 30 || config.max_new_tokens < 0 || config.max_new_tokens > 512)
     {
         if (error) *error = "ASR requires an open engine, valid model, positive preview interval, and 1..30 second audio limit";
         return false;

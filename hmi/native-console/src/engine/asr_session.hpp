@@ -28,6 +28,9 @@ struct AsrConfig
     double preview_interval_seconds = 1.0;
     bool refine = true;
     int maximum_audio_seconds = 30;
+    // Zero keeps the model's generation default. A positive limit is passed
+    // through the SDK request so callers can bound the Qwen decode cache.
+    int max_new_tokens = 0;
 };
 
 struct AsrStatistics

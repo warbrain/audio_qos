@@ -10,7 +10,11 @@ HMI_TEST(json_nested_unicode_roundtrip)
     using namespace hmi::util::json;
     Value value;
     std::string error;
-    CHECK(parse(R"({"text":"\u4f60\u597d\n\t\"\\\ud83d\ude00","array":[true,false,null,-12.5e2],"extra":{"skip":[1,2]}})", value, &error));
+    const std::string json_text = "{\"text\":\""
+        "\\u4f60\\u597d\\n\\t\\\"\\\\"
+        "\\ud83d\\ude00"
+        "\",\"array\":[true,false,null,-12.5e2],\"extra\":{\"skip\":[1,2]}}";
+    CHECK(parse(json_text, value, &error));
     CHECK(value.find("text") != nullptr);
     if (value.find("text"))
         CHECK(std::get<std::string>(value.find("text")->data) == "你好\n\t\"\\😀");

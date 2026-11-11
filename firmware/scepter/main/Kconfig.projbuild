@@ -1,0 +1,13 @@
+menu "CytoScepter microphone audio"
+
+    config MIC_OUTPUT_GAIN_X
+        int "Default fixed microphone output gain multiplier"
+        range 1 32
+        default 16
+        help
+            Fixed digital gain applied after HPF/FIR/decimation and before the
+            shared stereo soft limiter. The same value is applied to both
+            microphone channels. A validated HID setting stored in NVS can
+            override this default at runtime. This is not AGC.
+
+endmenu

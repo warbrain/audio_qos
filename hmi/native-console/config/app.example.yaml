@@ -7,9 +7,12 @@ voice:
   preview_interval_seconds: 1.0
   refine: true
   maximum_audio_seconds: 30
+  # 0 keeps the model default; set 256 only for a measured candidate run.
+  asr_max_new_tokens: 0
   vad_enabled: true
   vad_threshold: 0.35
-  hgtcrn_enabled: true
+  # Keep off: the current paired physical screen regressed recognition accuracy.
+  hgtcrn_enabled: false
   # Empty paths use the matching files in project/models/frontend.
   vad_model: ""
   hgtcrn_model: ""

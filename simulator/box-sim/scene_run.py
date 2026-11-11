@@ -110,14 +110,14 @@ def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--minutes", type=float, default=10.0)
     parser.add_argument("--modes", default="0,1,4,5")
-    parser.add_argument("--scene", required=True, help="input WAV for the selected scene")
-    parser.add_argument("--out", default=str(Path(__file__).resolve().parent / "scene-run"))
+    parser.add_argument("--scene", required=True, help="scenario WAV to play through the artificial mouth")
+    parser.add_argument("--out", default="scene-run")
     args = parser.parse_args()
 
     modes = [int(v) for v in args.modes.split(",") if v.strip()]
     os.makedirs(args.out, exist_ok=True)
     speech = load(args.scene)
-    out_dev, in_dev = find("US-4x4HR", True), find("WhisPrompt", False)
+    out_dev, in_dev = find("US-4x4HR", True), find("Audio QoS", False)
     per_mode = args.minutes * 60.0 / max(len(modes), 1)
     summary = []
 

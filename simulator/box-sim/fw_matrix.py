@@ -29,6 +29,7 @@ MOUTH = 1
 NOISE_L, NOISE_R = 2, 3
 CODECS = {4: "G722-64k", 3: "Opus-32k", 5: "Opus-62k"}
 MODES = {0: "bypass", 1: "DAS", 2: "NLMS", 3: "NLMS-stereo", 4: "DAS+Wiener", 5: "Wiener-stereo"}
+DSP = str(Path(__file__).resolve().with_name("dsp_param.py"))
 
 
 def find(name: str, want_out: bool) -> int:
@@ -59,7 +60,7 @@ def resample16(x: np.ndarray) -> np.ndarray:
 
 
 def dsp(args: list[str]) -> None:
-    subprocess.run([sys.executable, str(Path(__file__).with_name("dsp_param.py"))] + args,
+    subprocess.run([sys.executable, DSP] + args,
                    capture_output=True, timeout=30)
 
 
@@ -115,7 +116,7 @@ def main() -> int:
     args = parser.parse_args()
 
     speech = load(args.speech)
-    out_dev, in_dev = find("US-4x4HR", True), find("WhisPrompt", False)
+    out_dev, in_dev = find("US-4x4HR", True), find("Audio QoS", False)
     print(f"speech {len(speech) / SR:.2f}s  out={out_dev} in={in_dev}")
 
     dsp(["--codec", "4"])
@@ -136,7 +137,7 @@ def main() -> int:
         dsp(["--mode", str(mode)])
         time.sleep(0.4)
         peak, rms, corr = play_record(speech, out_dev, in_dev)
-        applied = subprocess.run([sys.executable, str(Path(__file__).with_name("dsp_param.py")), "--get", "19"],
+        applied = subprocess.run([sys.executable, DSP, "--get", "19"],
                                  capture_output=True, text=True, timeout=30).stdout.strip()
         print(f"mode {mode} {MODES.get(mode, '?'):<12} applied[{applied}]  "
               f"peak={peak:.2f} rms={20 * np.log10(rms + 1e-12):.1f} dBFS corr={corr:.3f}")

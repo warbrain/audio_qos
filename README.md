@@ -1,11 +1,10 @@
-# audio_qos
+# Audio QoS
 
-Source code for the WhisPrompt audio evaluation stack:
+Source code for the embedded audio path, Windows HMI, and acoustic test utilities.
 
-- simulator/box-sim: acoustic simulation and evaluation utilities.
-- firmware/whisprompt-fw: Scepter/Dongle ESP-IDF firmware and PC companion sources.
-- hmi/native-console: Windows native speech and microphone application.
+- firmware/ contains the ESP-IDF Scepter and Dongle projects and shared components.
+- hmi/native-console/ contains the Windows application and its native audio SDK sources.
+- simulator/box-sim/ contains physical capture utilities and reproducible acoustic simulation tools.
 
-Firmware projects require ESP-IDF v5.5.6. Simulator dependencies are listed in simulator/box-sim/requirements.txt. The HMI Native Console uses CMake and the local Windows/Vulkan/CUDA SDKs.
-
-Generated build output, logs, captured audio, test corpora, model weights, local reports, and machine-specific settings are excluded. Runtime datasets and model assets must be supplied separately under their applicable terms.
+Build output, logs, captured audio, datasets, and model weights are kept outside the source tree.
+See the component README files for requirements and build instructions.

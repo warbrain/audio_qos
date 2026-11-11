@@ -256,6 +256,7 @@ constexpr float kAsrNormalizeTargetRms = 0.0501f;  /* -26 dBFS */
 constexpr float kAsrNormalizeTriggerRms = 0.0200f; /* -34 dBFS */
 constexpr float kAsrNormalizeGateRms = 0.0010f;    /* -60 dBFS */
 constexpr float kAsrNormalizeMaxGain = 7.94f;      /* +18 dB */
+constexpr float kAsrNormalizePeakLimit = 0.89125f; /* -1 dBFS */
 
 struct AudioLevelMetrics
 {
@@ -277,12 +278,30 @@ AudioLevelMetrics measure_audio_levels(const std::vector<float> &audio)
     return levels;
 }
 
-float asr_normalization_gain(const AudioLevelMetrics &levels)
+float asr_normalization_gain(const AudioLevelMetrics &levels, bool peak_guard_enabled,
+    bool *peak_limited = nullptr,
+    float *rms_requested_gain = nullptr)
 {
+    if (peak_limited) *peak_limited = false;
     if (levels.rms < static_cast<double>(kAsrNormalizeGateRms) ||
-        levels.rms >= static_cast<double>(kAsrNormalizeTriggerRms)) return 1.0f;
+        levels.rms >= static_cast<double>(kAsrNormalizeTriggerRms))
+    {
+        if (rms_requested_gain) *rms_requested_gain = 1.0f;
+        return 1.0f;
+    }
     double gain = static_cast<double>(kAsrNormalizeTargetRms) / levels.rms;
     if (gain > static_cast<double>(kAsrNormalizeMaxGain)) gain = kAsrNormalizeMaxGain;
+    if (rms_requested_gain) *rms_requested_gain = static_cast<float>(gain);
+    if (peak_guard_enabled && levels.peak > 0.0f)
+    {
+        const double peak_gain = static_cast<double>(kAsrNormalizePeakLimit) /
+            static_cast<double>(levels.peak);
+        if (gain > std::max(1.0, peak_gain))
+        {
+            gain = std::max(1.0, peak_gain);
+            if (peak_limited) *peak_limited = true;
+        }
+    }
     return static_cast<float>(gain);
 }
 
@@ -293,6 +312,17 @@ bool asr_normalization_enabled()
     bool enabled = true;
     if (_dupenv_s(&value, &size, "HMI_ASR_NORMALIZE") == 0 && value != nullptr)
         enabled = !(value[0] == '0');
+    std::free(value);
+    return enabled;
+}
+
+bool asr_peak_guard_enabled()
+{
+    // Keep the data-supported peak-headroom candidate opt-in until paired ASR validation passes.
+    char *value = nullptr;
+    std::size_t size = 0;
+    const bool enabled = _dupenv_s(&value, &size, "HMI_ASR_PEAK_GUARD") == 0 &&
+        value != nullptr && value[0] == '1';
     std::free(value);
     return enabled;
 }
@@ -2023,8 +2053,12 @@ struct VoiceRuntime::Impl
         if (raw.size() == completed.frames && !stopping.load())
         {
             const bool normalization_enabled = asr_normalization_enabled();
+            const bool peak_guard_enabled = normalization_enabled && asr_peak_guard_enabled();
             const auto levels = measure_audio_levels(raw);
-            const float normalize_gain = normalization_enabled ? asr_normalization_gain(levels) : 1.0f;
+            bool peak_limited = false;
+            float rms_requested_gain = 1.0f;
+            const float normalize_gain = normalization_enabled
+                ? asr_normalization_gain(levels, peak_guard_enabled, &peak_limited, &rms_requested_gain) : 1.0f;
             const bool apply_normalization = normalize_gain > 1.01f;
             if (logger)
             {
@@ -2038,13 +2072,16 @@ struct VoiceRuntime::Impl
                     static_cast<double>(apply_normalization ? normalize_gain : 1.0f);
                 logger->write(base::LogLevel::Info, "asr",
                     "event=level_normalization_decision request_id=" + std::to_string(request_id) +
-                    " policy=target_m26_cap18_gate_m60_trigger_m34" +
+                    " policy=target_m26_cap18_gate_m60_trigger_m34_peak_m1_candidate" +
                     " enabled=" + std::string(normalization_enabled ? "1" : "0") +
+                    " peak_guard_enabled=" + std::string(peak_guard_enabled ? "1" : "0") +
                     " decision=" + decision +
                     " normalization_input_rms_dbfs=" + std::to_string(dbfs(levels.rms)) +
                     " normalization_input_peak_dbfs=" + std::to_string(dbfs(levels.peak)) +
-                    " requested_gain=" + std::to_string(normalize_gain) +
+                    " requested_gain=" + std::to_string(rms_requested_gain) +
                     " applied_gain=" + std::to_string(apply_normalization ? normalize_gain : 1.0f) +
+                    " peak_guard_limited=" + std::string(peak_limited ? "1" : "0") +
+                    " peak_guard_limit_dbfs=-1.000000" +
                     " projected_sample_peak_dbfs=" + std::to_string(dbfs(projected_peak)) +
                     " frames=" + std::to_string(raw.size()));
             }
@@ -2221,6 +2258,7 @@ struct VoiceRuntime::Impl
             config.preview_interval_seconds = options.preview_interval_seconds;
             config.refine = options.refine;
             config.maximum_audio_seconds = options.maximum_audio_seconds;
+            config.max_new_tokens = options.asr_max_new_tokens;
             const engine::detail::ScopedSdkThreads sdk_threads(config.threads);
             if (logger) logger->write(base::LogLevel::Info, "engine", "requested_backend=" + config.backend +
                 " threads=" + std::to_string(config.threads) + " sdk=" + client.version().build +
@@ -2453,9 +2491,10 @@ bool VoiceRuntime::start(const VoiceOptions &options, std::string *error)
         return false;
     }
     if (!std::isfinite(options.preview_interval_seconds) || options.preview_interval_seconds < 0.5 ||
-        options.preview_interval_seconds > 30.0 || options.maximum_audio_seconds < 1 || options.maximum_audio_seconds > 30)
+        options.preview_interval_seconds > 30.0 || options.maximum_audio_seconds < 1 || options.maximum_audio_seconds > 30 ||
+        options.asr_max_new_tokens < 0 || options.asr_max_new_tokens > 512)
     {
-        if (error) *error = "voice preview interval must be 0.5..30 seconds and maximum audio must be 1..30 seconds";
+        if (error) *error = "invalid voice preview/audio limit or ASR token budget (expected preview 0.5..30 s, audio 1..30 s, tokens 0..512)";
         impl.status(VoiceState::Error, error ? *error : "Invalid voice streaming options");
         return false;
     }

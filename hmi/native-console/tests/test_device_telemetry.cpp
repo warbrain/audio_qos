@@ -336,3 +336,21 @@ HMI_TEST(device_telemetry_valid_json_reply_text_is_not_resynchronized)
     }
     CHECK(decoder.statistics().malformed_records == 0);
 }
+
+HMI_TEST(device_telemetry_preserves_opus_codec_diagnostic_logs)
+{
+    hmi::device::TelemetryDecoder decoder;
+    const std::string line =
+        "I (123) dual_end_audio: tx seq=50 session=d93cb282 codec=3 profile=opus32 "
+        "encode_max_us=15067 layout=0 encoded_frames=741 process_calls=1482 "
+        "failures=0 failed_process_calls=0 encoded_bytes_last=164 opus_fec_enabled=0";
+    const auto records = decoder.feed(line + "\n");
+    CHECK(records.size() == 1);
+    if (!records.empty())
+    {
+        CHECK(records.front().text == line);
+        CHECK(records.front().json.empty());
+        CHECK(records.front().event.empty());
+    }
+    CHECK(decoder.statistics().malformed_records == 0);
+}

@@ -79,6 +79,7 @@ bool same_settings(const hmi::app::Settings &left, const hmi::app::Settings &rig
         left.voice.denoise_model == right.voice.denoise_model &&
         left.voice.preview_interval_seconds == right.voice.preview_interval_seconds &&
         left.voice.refine == right.voice.refine && left.voice.maximum_audio_seconds == right.voice.maximum_audio_seconds &&
+        left.voice.asr_max_new_tokens == right.voice.asr_max_new_tokens &&
         left.voice.tts_model == right.voice.tts_model && left.voice.rules_file == right.voice.rules_file &&
         left.voice.hotkeys.hold == right.voice.hotkeys.hold && left.voice.hotkeys.toggle == right.voice.hotkeys.toggle &&
         left.voice.hotkeys.use_config_file == right.voice.hotkeys.use_config_file &&
@@ -145,6 +146,7 @@ HMI_TEST(settings_defaults_and_empty_yaml_mapping)
     CHECK(settings.voice.hgtcrn_model == project / L"models/frontend/hgtcrn_noisy.safetensors");
     CHECK(settings.voice.preview_interval_seconds == 1.0);
     CHECK(settings.voice.refine && settings.voice.maximum_audio_seconds == 30);
+    CHECK(settings.voice.asr_max_new_tokens == 0);
     CHECK(settings.voice.hotkeys.hold == "Ctrl+Alt");
     CHECK(settings.voice.hotkeys.toggle == "Ctrl+Shift+M");
     CHECK(!settings.voice.hotkeys.use_config_file);
@@ -200,6 +202,7 @@ HMI_TEST(settings_validate_boundaries_and_leave_previous_options_on_failure)
         {"voice.preview_interval_seconds", YAML::Node(0.5)}, {"voice.preview_interval_seconds", YAML::Node(11.0)},
         {"voice.refine", YAML::Node("maybe")}, {"voice.maximum_audio_seconds", YAML::Node(0)},
         {"voice.maximum_audio_seconds", YAML::Node(31)},
+        {"voice.asr_max_new_tokens", YAML::Node(-1)}, {"voice.asr_max_new_tokens", YAML::Node(513)},
         {"logging.level", YAML::Node("verbose-invalid")}, {"logging.file", YAML::Node("")},
         {"logging.max_size_mb", YAML::Node(0)}, {"logging.max_size_mb", YAML::Node(1025)},
         {"logging.max_files", YAML::Node(0)}, {"logging.max_files", YAML::Node(33)},
@@ -312,6 +315,7 @@ HMI_TEST(settings_default_file_and_custom_options_roundtrip)
     written.voice.preview_interval_seconds = 3.0;
     written.voice.refine = false;
     written.voice.maximum_audio_seconds = 20;
+    written.voice.asr_max_new_tokens = 256;
     written.voice.vad_enabled = false;
     written.voice.denoise_enabled = true;
     written.voice.hgtcrn_enabled = true;
