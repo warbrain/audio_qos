@@ -666,7 +666,11 @@ def main(argv: Iterable[str] | None = None) -> int:
                     help="HMI Qwen3-ASR model (default <project>/src-tauri/native/models/asr.gguf)")
     ap.add_argument("--vad-path", type=Path, default=None,
                     help="HMI VAD asset path; VAD is disabled for this offline comparison")
-    ap.add_argument("--modes", default="0,4,6", help="spatial modes (default 0,4,6; mode 6 requires stereo input)")
+    ap.add_argument(
+        "--modes",
+        default="0,1,2,3,4,5,6",
+        help="spatial modes to evaluate in one paired sequence (default 0..6; mode 6 requires stereo input)",
+    )
     ap.add_argument("--gains", default="1", help="fixed gain sweep, e.g. 1,4,16 (default 1)")
     ap.add_argument("--level-normalize", choices=("none", "input", "dbfs"), default="none",
                     help="none = keep the condition's own level; input = match the source RMS; "
