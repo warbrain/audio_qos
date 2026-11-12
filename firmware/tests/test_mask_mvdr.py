@@ -69,6 +69,18 @@ int main(void) {
     assert(state.mvdr.fallback==4U);
     assert(state.mvdr.processed_hops==10U);
 
+    /* A quiet but non-silent Whisper-like frame (~-70 dBFS) must not be
+     * classified as digital silence by the absolute energy guard. */
+    assert(dual_end_spatial_reset(&state,6U,74U));
+    for(unsigned block=0;block<8U;++block) {
+        for(unsigned i=0;i<320U;++i) {
+            const int16_t quiet=sample(0.0003f*sinf((float)(phase++)*0.07f));
+            pcm[2U*i]=pcm[2U*i+1U]=quiet;
+        }
+        assert(dual_end_spatial_process(&state,pcm,320U));
+    }
+    assert(state.mvdr.fallback!=1U);
+
     assert(dual_end_spatial_reset(&state,6U,73U));
     for(unsigned block=0;block<4U;++block) {
         for(unsigned i=0;i<320U;++i) pcm[2U*i]=pcm[2U*i+1U]=32767;

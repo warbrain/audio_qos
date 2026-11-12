@@ -13,6 +13,9 @@
 #define MASK_THRESHOLD 1.5f
 #define DIAGONAL_LOAD 0.05f
 #define MAX_WEIGHT_POWER 16.0f
+/* -80 dBFS: the previous -54 dBFS cutoff suppressed nearly all Whisper hops
+ * in the physical low-noise pilot, so keep only the near-digital-silence guard. */
+#define MVDR_MIN_ACTIVE_RMS 0.0001f
 
 enum {
     MVDR_FALLBACK_OK = 0,
@@ -220,9 +223,10 @@ static bool process_hop(dual_end_mvdr_t *state)
         fft(state->fft[channel], false);
     }
 
-    const bool left_dead = peak[0] <= 2 && rms[1] >= 0.002f;
-    const bool right_dead = peak[1] <= 2 && rms[0] >= 0.002f;
-    const bool low_energy = rms[0] < 0.002f && rms[1] < 0.002f;
+    const bool left_dead = peak[0] <= 2 && rms[1] >= MVDR_MIN_ACTIVE_RMS;
+    const bool right_dead = peak[1] <= 2 && rms[0] >= MVDR_MIN_ACTIVE_RMS;
+    const bool low_energy = rms[0] < MVDR_MIN_ACTIVE_RMS &&
+                            rms[1] < MVDR_MIN_ACTIVE_RMS;
     uint64_t valid_this_hop = 0U;
     double mask_sum = 0.0;
 

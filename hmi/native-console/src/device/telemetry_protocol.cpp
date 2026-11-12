@@ -92,6 +92,7 @@ bool identity_for(std::string_view family, unsigned expected_parts, unsigned par
             else if (*event_text == "audio.owner_timing") event_parts = 17;
             else if (*event_text == "audio.dispatch") event_parts = 17;
             else if (*event_text == "audio.mvdr") event_parts = 8;
+            else if (*event_text == "audio.mic_stats") event_parts = 9;
         }
         if (!event_parts || expected_parts != event_parts ||
             !exact_unsigned(payload.find("schema"), 1) || !boot_value(payload.find("boot_id")) ||

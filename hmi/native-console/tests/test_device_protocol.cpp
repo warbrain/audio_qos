@@ -137,7 +137,7 @@ HMI_TEST(device_protocol_accepts_pipeline_capture_and_owner_timing_snapshots)
     const std::pair<std::string_view, unsigned> events[] = {
         {"audio.pipeline", 32}, {"audio.capture_health", 18},
         {"audio.owner_timing", 17}, {"audio.dispatch", 17},
-        {"audio.mvdr", 8}};
+        {"audio.mvdr", 8}, {"audio.mic_stats", 9}};
     for (const auto &[event, parts] : events)
     {
         SnapshotValidator validator;

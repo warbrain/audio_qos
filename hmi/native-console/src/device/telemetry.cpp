@@ -56,6 +56,7 @@ std::string_view scepter_event_for_kind(int kind) noexcept
     case 3: return "audio.owner_timing";
     case 6: return "audio.dispatch";
     case 7: return "audio.mvdr";
+    case 8: return "audio.mic_stats";
     default: return {};
     }
 }
@@ -291,6 +292,7 @@ struct Connection
     unsigned scepter_diagnostic_cursor = 0;
     DWORD last_open_error = 0;
     bool verified = false;
+    bool mic_stats_v1 = false;
     bool restore_mirror_off = false;
     bool storage_failed = false;
     bool journal_open = false;
@@ -346,6 +348,12 @@ struct Telemetry::Impl
     {
         if (node.endpoint.role == "scepter")
         {
+            if (node.mic_stats_v1)
+            {
+                append_group(node, "SCEPTER_TELEMETRY", 9, 8, 0, true);
+                node.next_poll = Clock::now() + std::chrono::seconds(options.poll_interval_seconds);
+                return;
+            }
             // Keep each multipart firmware snapshot inside one short cache
             // window. Prioritize one family per poll; queuing all families
             // behind the base/performance requests can cross that boundary.
@@ -462,6 +470,7 @@ struct Telemetry::Impl
             reason == "unexpected_firmware_role" || reason == "unsupported_firmware" || reason.starts_with("write_failed_"));
         node.verified = false;
         node.restore_mirror_off = false;
+        node.mic_stats_v1 = false;
         node.pending.reset();
         node.commands.clear();
         node.snapshot.reset();
@@ -584,6 +593,7 @@ struct Telemetry::Impl
                 if (!open_journal(node))
                 { close(node, "storage_failed"); node.next_open = Clock::now() + std::chrono::seconds(30); return; }
                 node.verified = true;
+                node.mic_stats_v1 = false;
                 { std::lock_guard lock(mutex); ++measured.connections; ++measured.connected_devices; }
                 log(base::LogLevel::Info, "event=connected device=" + node.endpoint.id + " port=" + utf8(node.endpoint.port));
                 node.commands.push_back({"STATUS", "STATUS", 0, -1});
@@ -592,6 +602,11 @@ struct Telemetry::Impl
                     if (!node.serial.mirror(true)) error("event=mirror_unavailable device=" + node.endpoint.id);
                     node.commands.push_back({"LOG", "LOG", 0, -1});
                 }
+            }
+            else if (name == "STATUS")
+            {
+                node.mic_stats_v1 = node.endpoint.role == "scepter" &&
+                    contains_header_token(record.text, "telemetry=mic_stats_v1");
                 poll(node);
             }
             else if (name == "LOG" && record.text == "OK LOG mirror=0" && !node.restore_mirror_off)
