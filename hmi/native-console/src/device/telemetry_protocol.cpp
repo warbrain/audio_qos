@@ -82,7 +82,17 @@ bool identity_for(std::string_view family, unsigned expected_parts, unsigned par
     }
     else if (family == "SCEPTER_TELEMETRY")
     {
-        if (expected_parts != 17 || !exact_text(payload.find("event"), "audio.dispatch") ||
+        const auto *event_value = payload.find("event");
+        const auto *event_text = event_value ? std::get_if<std::string>(&event_value->data) : nullptr;
+        unsigned event_parts = 0;
+        if (event_text)
+        {
+            if (*event_text == "audio.pipeline") event_parts = 32;
+            else if (*event_text == "audio.capture_health") event_parts = 18;
+            else if (*event_text == "audio.owner_timing") event_parts = 17;
+            else if (*event_text == "audio.dispatch") event_parts = 17;
+        }
+        if (!event_parts || expected_parts != event_parts ||
             !exact_unsigned(payload.find("schema"), 1) || !boot_value(payload.find("boot_id")) ||
             !exact_unsigned(payload.find("part"), part)) return false;
         std::uint32_t role = 0, mode = 0;

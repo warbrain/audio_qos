@@ -39,6 +39,16 @@ std::string dispatch(unsigned part, unsigned sequence = 77)
         ",\"c\":4,\"m\":0" + (part == 0 ? ",\"part_count\":17" : "") + extra + "}";
 }
 
+std::string scepter_audio_event(std::string_view event, unsigned part, unsigned parts,
+                                unsigned sequence = 77)
+{
+    return "{\"event\":\"" + std::string(event) +
+        "\",\"schema\":1,\"boot_id\":\"2e4523d4\",\"role\":0,\"session_id\":42,\"seq\":" +
+        std::to_string(sequence) + ",\"part\":" + std::to_string(part) +
+        ",\"c\":5,\"m\":0" +
+        (part == 0 ? ",\"part_count\":" + std::to_string(parts) : "") + "}";
+}
+
 std::string changed(std::string_view json, std::string key, Value value)
 {
     Value parsed;
@@ -120,6 +130,30 @@ HMI_TEST(device_protocol_accepts_complete_ordered_scepter_dispatch_snapshot)
         CHECK(validator.observe("SCEPTER_TELEMETRY", 41, 17, part, dispatch(part)) ==
               (part == 16 ? SnapshotStatus::Complete : SnapshotStatus::Incomplete));
     CHECK(validator.observe("SCEPTER_TELEMETRY", 41, 17, 16, dispatch(16)) == SnapshotStatus::Mismatch);
+}
+
+HMI_TEST(device_protocol_accepts_pipeline_capture_and_owner_timing_snapshots)
+{
+    const std::pair<std::string_view, unsigned> events[] = {
+        {"audio.pipeline", 32}, {"audio.capture_health", 18},
+        {"audio.owner_timing", 17}, {"audio.dispatch", 17}};
+    for (const auto &[event, parts] : events)
+    {
+        SnapshotValidator validator;
+        for (unsigned part = 0; part < parts; ++part)
+            CHECK(validator.observe("SCEPTER_TELEMETRY", 41, parts, part,
+                scepter_audio_event(event, part, parts)) ==
+                (part + 1 == parts ? SnapshotStatus::Complete : SnapshotStatus::Incomplete));
+    }
+}
+
+HMI_TEST(device_protocol_rejects_wrong_scepter_event_or_part_count)
+{
+    SnapshotValidator validator;
+    CHECK(validator.observe("SCEPTER_TELEMETRY", 41, 32, 0,
+        scepter_audio_event("audio.capture_health", 0, 18)) == SnapshotStatus::Invalid);
+    CHECK(validator.observe("SCEPTER_TELEMETRY", 42, 32, 0,
+        scepter_audio_event("audio.pipeline", 0, 31)) == SnapshotStatus::Invalid);
 }
 
 HMI_TEST(device_protocol_accepts_unknown_codec_dispatch_snapshot)

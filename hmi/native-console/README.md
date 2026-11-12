@@ -58,6 +58,7 @@ native 保留当前 Qwen3-ASR/TTS、Silero 静音检测和 H-GTCRN 所需的构�
 HMI 启动后会在独立后台线程发现 USB 串口，验证 Scepter 与 Dongle 身份并接收设备日志。
 设备插拔或串口换号后自动重连；端口被刷机或评测程序占用时退避重试。
 设备收集不依赖语音模型加载结果，不在界面或录音回调中读串口、解析或写文件。
+Scepter 除基础状态外会轮询 `audio.pipeline`、`audio.capture_health`、`audio.owner_timing` 与 `audio.dispatch` 完整分段快照，分别保留处理阶段、48 kHz 双通道电平/削波/固定增益、编码/无线提交耗时及队列归属计数。快照以设备 boot/session/codec/mode/sequence 身份校验；part 缺失或身份不一致时记录失败并重试，不拼接成看似完整的数据。
 
 默认保存到程序旁 `logs/devices/`，自定义主日志位置时使用同一日志目录下的 `devices/`：
 

@@ -47,6 +47,18 @@ bool contains_header_token(std::string_view header, std::string_view expected)
     return false;
 }
 
+std::string_view scepter_event_for_kind(int kind) noexcept
+{
+    switch (kind)
+    {
+    case 1: return "audio.pipeline";
+    case 2: return "audio.capture_health";
+    case 3: return "audio.owner_timing";
+    case 6: return "audio.dispatch";
+    default: return {};
+    }
+}
+
 std::int64_t epoch_ms()
 {
     return std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -237,8 +249,10 @@ bool matches(const Command &command, const TelemetryRecord &record)
         json_at - (response_at + prefix.size()));
     if (command.name == "SCEPTER_TELEMETRY")
     {
+        const auto expected_event = scepter_event_for_kind(command.stage);
+        if (expected_event.empty()) return false;
         if (!contains_header_token(reply_header, "kind=" + std::to_string(command.stage)) ||
-            !contains_header_token(reply_header, "event=audio.dispatch")) return false;
+            !contains_header_token(reply_header, "event=" + std::string(expected_event))) return false;
     }
     else if (!std::all_of(reply_header.begin(), reply_header.end(),
                           [](char c) { return c == ' ' || c == '\t'; })) return false;
@@ -273,6 +287,7 @@ struct Connection
     std::size_t identity_bytes = 0;
     Clock::time_point next_open{}, deadline{}, next_poll{}, last_query_warning{}, last_rx{};
     std::uint64_t connection = 0;
+    unsigned scepter_diagnostic_cursor = 0;
     DWORD last_open_error = 0;
     bool verified = false;
     bool restore_mirror_off = false;
@@ -328,12 +343,20 @@ struct Telemetry::Impl
 
     void poll(Connection &node)
     {
+        if (node.endpoint.role == "scepter")
+        {
+            // Keep each multipart firmware snapshot inside one short cache
+            // window. Prioritize one family per poll; queuing all families
+            // behind the base/performance requests can cross that boundary.
+            constexpr unsigned counts[] = {32, 18, 17, 17};
+            constexpr int kinds[] = {1, 2, 3, 6};
+            const auto index = node.scepter_diagnostic_cursor++ % std::size(counts);
+            append_group(node, "SCEPTER_TELEMETRY", counts[index], kinds[index], 0, true);
+        }
         append_group(node, "TELEMETRY", 10);
         const int first = node.endpoint.role == "scepter" ? 0 : 2;
         append_group(node, "PERF_SNAPSHOT", 13, first);
         append_group(node, "PERF_SNAPSHOT", 13, first + 1);
-        if (node.endpoint.role == "scepter")
-            append_group(node, "SCEPTER_TELEMETRY", 17, 6);
         if (node.endpoint.role == "dongle") append_group(node, "DONGLE_TELEMETRY_V2", 14);
         node.next_poll = Clock::now() + std::chrono::seconds(options.poll_interval_seconds);
     }
