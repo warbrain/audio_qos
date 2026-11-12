@@ -132,12 +132,9 @@ int main(void) {
 
 def test_same_wire_constants_on_both_targets():
     relative = "components/dual_end_common/include/dual_end_link_config.h"
-    import re
     scepter = (ROOT / "scepter" / relative).read_text(encoding="utf-8")
     dongle = (ROOT / "dongle" / relative).read_text(encoding="utf-8")
-    normalize = lambda text: re.sub(r'#define SCEPTER_FW_VERSION "[^"]+"',
-                                    '#define SCEPTER_FW_VERSION "<per-target>"', text)
-    assert normalize(scepter) == normalize(dongle)
+    assert scepter == dongle
 
 
 def test_spatial_stereo_request_owner_and_capability_intersection(tmp_path: Path):

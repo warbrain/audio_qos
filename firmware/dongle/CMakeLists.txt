@@ -3,10 +3,7 @@ cmake_minimum_required(VERSION 3.16)
 if(NOT DEFINED DUAL_END_IMAGE_KEY)
     set(DUAL_END_IMAGE_KEY "app")
 endif()
-set(DUAL_END_PUBLIC_VERSION "0.5.21")
-if(NOT DUAL_END_PUBLIC_VERSION MATCHES "^[0-9]+\\.[0-9]+\\.[0-9]+$")
-    message(FATAL_ERROR "Public firmware version must be numeric major.minor.patch")
-endif()
+include("${CMAKE_CURRENT_LIST_DIR}/../dual_mic_version.cmake")
 # Keep the app image-key prefix required by already installed OTA validators.
 set(PROJECT_VER "${DUAL_END_IMAGE_KEY}-${DUAL_END_PUBLIC_VERSION}")
 

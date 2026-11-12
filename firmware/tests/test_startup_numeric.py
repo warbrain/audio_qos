@@ -184,15 +184,20 @@ int main(void){
 
 
 def test_shared_numeric_version_and_critical_confirmation_precedes_profiler(tmp_path):
-    versions = []
-    for role in ('scepter','dongle'):
-        cmake = (ROOT/role/'CMakeLists.txt').read_text(encoding='utf-8')
-        version = re.search(r'set\(DUAL_END_PUBLIC_VERSION "([^"]+)"\)',cmake).group(1)
-        assert re.fullmatch(r'\d+\.\d+\.\d+',version)
-        assert 'set(PROJECT_VER "${DUAL_END_IMAGE_KEY}-${DUAL_END_PUBLIC_VERSION}")' in cmake
-        header = (ROOT/role/'components/dual_end_common/include/dual_end_link_config.h').read_text(encoding='utf-8')
-        assert re.search(r'^#define SCEPTER_FW_VERSION "([^"]+)"',header,re.M).group(1)==version
-        versions.append(version)
+    versions = []
+    shared_cmake = (ROOT/'dual_mic_version.cmake').read_text(encoding='utf-8')
+    shared_version = re.search(r'set\(DUAL_END_PUBLIC_VERSION "([^"]+)"\)',shared_cmake).group(1)
+    assert re.fullmatch(r'\d+\.\d+\.\d+',shared_version)
+    for role in ('scepter','dongle'):
+        cmake = (ROOT/role/'CMakeLists.txt').read_text(encoding='utf-8')
+        version = shared_version
+        assert 'include("${CMAKE_CURRENT_LIST_DIR}/../dual_mic_version.cmake")' in cmake
+        assert 'set(PROJECT_VER "${DUAL_END_IMAGE_KEY}-${DUAL_END_PUBLIC_VERSION}")' in cmake
+        header = (ROOT/role/'components/dual_end_common/include/dual_end_link_config.h').read_text(encoding='utf-8')
+        assert re.search(r'^#define SCEPTER_FW_VERSION "([^"]+)"',header,re.M).group(1)==version
+        versions.append(version)
+        readme = (ROOT/role/'README.md').read_text(encoding='utf-8')
+        assert f'当前配对版本为 {version}' in readme
         app = function((ROOT/role/'main/app_main.c').read_text(encoding='utf-8'),'app_main')
         confirm = app.index('dual_end_ota_confirm_running_image(')
         assert confirm < app.index('dual_end_runtime_start')
