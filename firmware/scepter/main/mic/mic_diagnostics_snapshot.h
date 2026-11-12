@@ -27,6 +27,13 @@ typedef struct {
 } mic_wiener_diagnostics_t;
 
 typedef struct {
+    bool available, noise_valid;
+    uint16_t fallback, speech_mask_q15;
+    uint64_t processed_hops, valid_bins, fallback_bins, fallback_hops;
+    uint64_t queue_underflows, queue_overflows;
+} mic_mvdr_diagnostics_t;
+
+typedef struct {
     bool ready;
     bool spatial_ready;
     uint32_t cache_sequence;
@@ -36,4 +43,7 @@ typedef struct {
      * Per-channel counters are since the selected mode's generation reset and
      * remain unavailable outside applied Wiener modes 4 and 5. */
     mic_wiener_diagnostics_t wiener;
+    /* Captured at the same immutable window boundary; populated only for
+     * applied spatial mode 6. */
+    mic_mvdr_diagnostics_t mvdr;
 } mic_audio_diagnostics_snapshot_t;

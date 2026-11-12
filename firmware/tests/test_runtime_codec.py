@@ -132,7 +132,12 @@ int main(void) {
 
 def test_same_wire_constants_on_both_targets():
     relative = "components/dual_end_common/include/dual_end_link_config.h"
-    assert (ROOT / "scepter" / relative).read_bytes() == (ROOT / "dongle" / relative).read_bytes()
+    import re
+    scepter = (ROOT / "scepter" / relative).read_text(encoding="utf-8")
+    dongle = (ROOT / "dongle" / relative).read_text(encoding="utf-8")
+    normalize = lambda text: re.sub(r'#define SCEPTER_FW_VERSION "[^"]+"',
+                                    '#define SCEPTER_FW_VERSION "<per-target>"', text)
+    assert normalize(scepter) == normalize(dongle)
 
 
 def test_spatial_stereo_request_owner_and_capability_intersection(tmp_path: Path):
@@ -175,7 +180,7 @@ static uint16_t s_spatial_requested_mode,s_spatial_generation,s_spatial_commit_m
 static uint32_t s_spatial_request_generation,s_spatial_applied_request,
     s_spatial_transition_generation,s_spatial_commit_generation;
 static esp_err_t s_spatial_apply_result=ESP_OK;
-static bool s_spatial_transition_active,s_spatial_commit_pending;
+static bool s_spatial_transition_active,s_spatial_commit_pending,s_spatial_dispatch_paused;
 static void *s_mic_task_handle=(void*)1,*s_config_task_handle=(void*)2;
 static uint8_t layout,s_dsp_reply[16],usb_reply[16],fixture_peer[6]={1,2,3,4,5,6};
 static uint32_t s_control_sequence;
@@ -194,6 +199,7 @@ static void mic_spatial_reset_state_owner(uint16_t mode) {
 static void mic_frame_dispatch_control_lock(void) { ++locked; }
 static void mic_frame_dispatch_control_unlock(void) { assert(locked); --locked; }
 static void mic_frame_dispatch_invalidate(void) { ++invalidated; }
+static void mic_frame_dispatch_reset_stale_queue(void) { ++invalidated; }
 static void xTaskNotifyGive(void *task) {
     assert(task); ++notices;
     if (!postpone && !notifying) {
@@ -229,8 +235,8 @@ static void request(uint8_t op,uint8_t item,uint16_t value) {
 }
 int main(void) {
     uint16_t actual=999;mic_spatial_reset_state_owner(0);s_spatial_status=s_spatial->stats;
-    assert(mic_spatial_parameter(false,17,0,&actual)==ESP_OK&&actual==31);
-    const uint16_t sequence[]={0,1,2,3,2,3,4,5,0};
+    assert(mic_spatial_parameter(false,17,0,&actual)==ESP_OK&&actual==63);
+    const uint16_t sequence[]={0,1,2,3,2,3,4,5,6,0};
     for(unsigned i=0;i<sizeof(sequence)/sizeof(sequence[0]);++i) {
         uint16_t mode=sequence[i],generation=s_spatial_generation;
         assert(mic_spatial_parameter(true,18,mode,&actual)==ESP_OK&&actual==mode);
@@ -242,10 +248,10 @@ int main(void) {
         request(2,18,mode);
     }
     unsigned before=notices,prepares=layout_prepares;uint16_t generation=s_spatial_generation;
-    assert(mic_spatial_parameter(true,18,6,&actual)==ESP_ERR_INVALID_ARG);
+    assert(mic_spatial_parameter(true,18,7,&actual)==ESP_ERR_INVALID_ARG);
     assert(mic_spatial_parameter(true,19,3,&actual)==ESP_ERR_INVALID_ARG);
     assert(notices==before&&layout_prepares==prepares&&s_spatial_generation==generation);
-    uint8_t invalid[16]={0x11,3,2,18,1,0,0,0,6,0};before=queued;
+    uint8_t invalid[16]={0x11,3,2,18,1,0,0,0,7,0};before=queued;
     assert(dongle_dsp_request(invalid)==ESP_ERR_INVALID_ARG&&queued==before);
     layout_result=ESP_FAIL;
     assert(mic_spatial_parameter(true,18,3,&actual)==ESP_FAIL);
@@ -259,24 +265,25 @@ int main(void) {
     postpone=false;(void)mic_spatial_apply_control();mic_owner_apply_spatial_commit();
     assert(s_spatial->stats.mode==2&&layout==1&&!s_spatial_transition_active);
     /* Actual reply intersection gates every spatial mode on both device caps. */
-    for(uint16_t caps=0;caps<32;++caps) {
+    for(uint16_t caps=0;caps<64;++caps) {
         request(1,17,0);dual_end_control_packet_t response=forwarded;
         response.packet.source_role=SCEPTER_ROLE_SCEPTER;
         response.packet.message_type=SCEPTER_MSG_CONTROL_RESPONSE;
         response.data[7]=(uint8_t)caps;response.data[8]=0;response.data[9]=0;
         dongle_dsp_response(fixture_peer,(const uint8_t*)&response,DUAL_END_CONTROL_PACKET_WIRE_BYTES(13),0,NULL);
         uint16_t reported=dual_end_codec_u16(usb_reply+8);
-        assert(reported==(caps&31U));
+        assert(reported==(caps&63U));
         assert(dual_end_spatial_mode_supported(3,reported)==((caps&4U)!=0));
         assert(dual_end_spatial_mode_supported(4,reported)==((caps&9U)==9U));
         assert(dual_end_spatial_mode_supported(5,reported)==((caps&16U)!=0));
+        assert(dual_end_spatial_mode_supported(6,reported)==((caps&32U)!=0));
         assert(usb_reply[10]==0);
     }
-    assert(!locked);puts("spatial HID modes 0..5 / owner apply-reset-rollback / capability intersection PASS");
+    assert(!locked);puts("spatial HID modes 0..6 / owner apply-reset-rollback / capability intersection PASS");
     return 0;
 }
 ''', encoding='utf-8')
-    executable, env = _build_host_executable([harness, CODEC / 'dual_end_spatial.c', CODEC / 'dual_end_wiener.c'], tmp_path,
+    executable, env = _build_host_executable([harness, CODEC / 'dual_end_spatial.c', CODEC / 'dual_end_wiener.c', CODEC / 'dual_end_mvdr.c'], tmp_path,
         extra_includes=(CODEC / 'include',))
     assert 'PASS' in _run([str(executable)], cwd=tmp_path, env=env).stdout
 

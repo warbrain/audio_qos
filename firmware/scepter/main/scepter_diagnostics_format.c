@@ -21,11 +21,92 @@ unsigned scepter_diagnostics_part_count(unsigned kind)
         return MIC_NLMS_TELEMETRY_PARTS;
     case SCEPTER_DIAGNOSTICS_KIND_WIENER:
         return SCEPTER_DIAGNOSTICS_WIENER_PARTS;
+    case SCEPTER_DIAGNOSTICS_KIND_MVDR:
+        return SCEPTER_DIAGNOSTICS_MVDR_PARTS;
     case SCEPTER_DIAGNOSTICS_KIND_DISPATCH:
         return MIC_DISPATCH_TELEMETRY_PARTS;
     default:
         return 0;
     }
+}
+
+static size_t mvdr_format_part(
+    const mic_audio_diagnostics_snapshot_t *snapshot,
+    unsigned part,
+    char *buffer,
+    size_t capacity)
+{
+    if (!snapshot || !snapshot->spatial_ready || !buffer || !capacity ||
+        part >= SCEPTER_DIAGNOSTICS_MVDR_PARTS) return 0;
+
+    const dual_end_spatial_telemetry_t *spatial = &snapshot->spatial;
+    const mic_mvdr_diagnostics_t *mvdr = &snapshot->mvdr;
+    const bool active = mvdr->available &&
+        spatial->applied == DUAL_END_SPATIAL_MASK_MVDR;
+    const int prefix = snprintf(buffer, capacity,
+        "{\"event\":\"audio.mvdr\",\"schema\":1,\"boot_id\":\"%08" PRIx32
+        "\",\"role\":0,\"session_id\":%" PRIu32 ",\"seq\":%" PRIu32
+        ",\"part\":%u",
+        spatial->boot_id, spatial->session_id, snapshot->cache_sequence, part);
+    if (prefix < 0 || (size_t)prefix >= capacity) {
+        buffer[0] = '\0';
+        return 0;
+    }
+
+    char *out = buffer + prefix;
+    const size_t left = capacity - (size_t)prefix;
+    int fields = -1;
+    switch (part) {
+    case 0:
+        fields = snprintf(out, left,
+            ",\"part_count\":%u,\"sampled_us\":\"%" PRIu64 "\"}",
+            SCEPTER_DIAGNOSTICS_MVDR_PARTS, spatial->sampled_us);
+        break;
+    case 1:
+        fields = active ? snprintf(out, left,
+            ",\"active\":true,\"available\":true,\"noise_valid\":%s,\"fallback\":%u}",
+            mvdr->noise_valid ? "true" : "false", (unsigned)mvdr->fallback) :
+            snprintf(out, left,
+            ",\"active\":false,\"available\":false,\"noise_valid\":null,\"fallback\":null}");
+        break;
+    case 2:
+        fields = active ? snprintf(out, left, ",\"processed_hops\":\"%" PRIu64 "\"}",
+                                   mvdr->processed_hops) :
+                          snprintf(out, left, ",\"processed_hops\":null}");
+        break;
+    case 3:
+        fields = active ? snprintf(out, left, ",\"valid_bins\":\"%" PRIu64 "\"}",
+                                   mvdr->valid_bins) :
+                          snprintf(out, left, ",\"valid_bins\":null}");
+        break;
+    case 4:
+        fields = active ? snprintf(out, left, ",\"fallback_bins\":\"%" PRIu64 "\"}",
+                                   mvdr->fallback_bins) :
+                          snprintf(out, left, ",\"fallback_bins\":null}");
+        break;
+    case 5:
+        fields = active ? snprintf(out, left,
+            ",\"fallback_hops\":\"%" PRIu64 "\",\"speech_mask_q15\":%u}",
+            mvdr->fallback_hops, (unsigned)mvdr->speech_mask_q15) :
+            snprintf(out, left, ",\"fallback_hops\":null,\"speech_mask_q15\":null}");
+        break;
+    case 6:
+        fields = active ? snprintf(out, left, ",\"queue_underflows\":\"%" PRIu64 "\"}",
+                                   mvdr->queue_underflows) :
+                          snprintf(out, left, ",\"queue_underflows\":null}");
+        break;
+    case 7:
+        fields = active ? snprintf(out, left, ",\"queue_overflows\":\"%" PRIu64 "\"}",
+                                   mvdr->queue_overflows) :
+                          snprintf(out, left, ",\"queue_overflows\":null}");
+        break;
+    }
+    if (fields < 0 || (size_t)fields >= left ||
+        (size_t)prefix + (size_t)fields >= DUAL_END_TELEMETRY_JSON_BYTES) {
+        buffer[0] = '\0';
+        return 0;
+    }
+    return (size_t)prefix + (size_t)fields;
 }
 
 static size_t wiener_format_part(
@@ -190,6 +271,12 @@ size_t scepter_diagnostics_format_part(
         if (schema) *schema = 1U;
         if (active) *active = snapshot->wiener.available;
         return wiener_format_part(snapshot, part, buffer, capacity);
+    case SCEPTER_DIAGNOSTICS_KIND_MVDR:
+        if (event_name) *event_name = "audio.mvdr";
+        if (schema) *schema = 1U;
+        if (active) *active = snapshot->mvdr.available &&
+            snapshot->spatial.applied == DUAL_END_SPATIAL_MASK_MVDR;
+        return mvdr_format_part(snapshot, part, buffer, capacity);
     case SCEPTER_DIAGNOSTICS_KIND_DISPATCH:
         if (event_name) *event_name = "audio.dispatch";
         if (schema) *schema = 1U;

@@ -67,6 +67,19 @@ class PatternReportTests(unittest.TestCase):
         self.assertEqual(EVAL.noise_pattern("noise_s2_shape_snr-5_variantA"), ("shape", -5))
         self.assertIsNone(EVAL.noise_pattern("noise_shape_minus5"))
 
+    def test_stereo_reader_preserves_two_channels_until_after_spatial_processing(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            source = Path(temporary) / "stereo.wav"
+            with wave.open(str(source), "wb") as audio:
+                audio.setnchannels(2)
+                audio.setsampwidth(2)
+                audio.setframerate(16000)
+                audio.writeframes(b"\x00\x40\x00\xc0" * 320)
+            channels = EVAL.read_wav_channels16k(source)
+            self.assertEqual(channels.shape, (320, 2))
+            self.assertNotEqual(channels[0, 0], channels[0, 1])
+            self.assertAlmostEqual(EVAL.downmix_channels(channels)[0], 0.0, places=3)
+
     def test_native_worker_frames_are_length_bounded_and_round_trip(self) -> None:
         value = {"type": "Commit", "text": "中文"}
         self.assertEqual(EVAL.native_worker_frames(EVAL.native_worker_frame(value)), [value])

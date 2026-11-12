@@ -35,6 +35,7 @@ bool dual_end_spatial_reset(dual_end_spatial_t *s,uint16_t mode,uint16_t generat
     if(mode==DUAL_END_SPATIAL_DAS_WIENER || mode==DUAL_END_SPATIAL_WIENER_STEREO)
         dual_end_wiener_reset(&s->wiener);
     if(mode==DUAL_END_SPATIAL_WIENER_STEREO) dual_end_wiener_reset(&s->wiener_right);
+    if(mode==DUAL_END_SPATIAL_MASK_MVDR) dual_end_mvdr_reset(&s->mvdr);
     return true;
 }
 
@@ -128,6 +129,12 @@ bool dual_end_spatial_process_timed(dual_end_spatial_t *s,int16_t *pcm,size_t fr
         }
         s->stats.frames+=frames;
         s->stats.fallback=DUAL_END_SPATIAL_OK;
+        return true;
+    }
+    if (s->stats.mode==DUAL_END_SPATIAL_MASK_MVDR) {
+        if (!dual_end_mvdr_process(&s->mvdr, pcm, frames)) return false;
+        s->stats.frames += frames;
+        s->stats.fallback = s->mvdr.fallback;
         return true;
     }
     const bool matching=s->stats.mode==DUAL_END_SPATIAL_NLMS ||

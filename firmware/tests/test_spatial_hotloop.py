@@ -74,7 +74,7 @@ int main(void) {
     return 0;
 }
 '''.replace('MODE_VALUE', str(mode)), encoding='utf-8')
-    exe, env = _build_host_executable([harness, reference, CODEC / 'dual_end_spatial.c', CODEC / 'dual_end_wiener.c'], tmp_path,
+    exe, env = _build_host_executable([harness, reference, CODEC / 'dual_end_spatial.c', CODEC / 'dual_end_wiener.c', CODEC / 'dual_end_mvdr.c'], tmp_path,
         extra_includes=(CODEC / 'include',))
     assert 'PASS' in _run([str(exe)], cwd=tmp_path, env=env).stdout
 
@@ -128,18 +128,19 @@ static void compare(int16_t *pcm) {
     assert(!memcmp(&normalized,&fused,sizeof(fused)));
 }
 int main(void) {
-    assert(DUAL_END_SPATIAL_CAPABILITIES==31U);
-    for(uint16_t caps=0;caps<32;++caps) {
+    assert(DUAL_END_SPATIAL_CAPABILITIES==63U);
+    for(uint16_t caps=0;caps<64;++caps) {
         assert(dual_end_spatial_mode_supported(0,caps));
         assert(dual_end_spatial_mode_supported(1,caps)==((caps&1U)==1U));
         assert(dual_end_spatial_mode_supported(2,caps)==((caps&3U)==3U));
         assert(dual_end_spatial_mode_supported(3,caps)==((caps&4U)==4U));
         assert(dual_end_spatial_mode_supported(4,caps)==((caps&9U)==9U));
         assert(dual_end_spatial_mode_supported(5,caps)==((caps&16U)==16U));
+        assert(dual_end_spatial_mode_supported(6,caps)==((caps&32U)==32U));
     }
     assert(!dual_end_spatial_mode_supported(3,7U&3U));
     assert(!dual_end_spatial_mode_supported(3,3U&7U));
-    assert(!dual_end_spatial_mode_supported(6,UINT16_MAX));
+    assert(!dual_end_spatial_mode_supported(6,31U));
     int16_t pcm[640];reset(17);
     for(unsigned i=0;i<320;++i){pcm[2*i]=30;pcm[2*i+1]=12;}
     compare(pcm);
@@ -190,16 +191,16 @@ int main(void) {
     assert(stereo.stats.generation==31&&stereo.stats.layout==0&&stereo.coefficients[0]==1.0f);
     assert(!stereo.history_frames&&!stereo.stats.frames&&!stereo.stats.matching_mix);
     dual_end_spatial_t untouched=stereo;int16_t original[640];memcpy(original,pcm,sizeof(pcm));
-    assert(!dual_end_spatial_reset(&stereo,6,32)&&!memcmp(&untouched,&stereo,sizeof(stereo)));
+    assert(!dual_end_spatial_reset(&stereo,7,32)&&!memcmp(&untouched,&stereo,sizeof(stereo)));
     assert(!dual_end_spatial_process(&stereo,pcm,319)&&!memcmp(&untouched,&stereo,sizeof(stereo)));
-    stereo.stats.mode=6;untouched=stereo;
+    stereo.stats.mode=7;untouched=stereo;
     assert(!dual_end_spatial_process(&stereo,pcm,320));
     assert(!memcmp(&untouched,&stereo,sizeof(stereo))&&!memcmp(original,pcm,sizeof(pcm)));
     puts("PASS: NLMS stereo channel separation, convergence, legacy matcher parity, caps, faults, reset and bounds");
     return 0;
 }
 ''', encoding='utf-8')
-    exe, env = _build_host_executable([harness, CODEC / 'dual_end_spatial.c', CODEC / 'dual_end_wiener.c'], tmp_path,
+    exe, env = _build_host_executable([harness, CODEC / 'dual_end_spatial.c', CODEC / 'dual_end_wiener.c', CODEC / 'dual_end_mvdr.c'], tmp_path,
         extra_includes=(CODEC / 'include',))
     assert 'PASS' in _run([str(exe)], cwd=tmp_path, env=env).stdout
 
@@ -235,6 +236,6 @@ int main(void) {
 '''.replace('MODE_VALUE', str(mode)).replace('EXPECTED_CHANNELS', str(channels))
        .replace('EXPECTED_CLOCK_CALLS', str(clock_calls)), encoding='utf-8')
     exe, env = _build_host_executable(
-        [harness, CODEC / 'dual_end_spatial.c', CODEC / 'dual_end_wiener.c'],
+        [harness, CODEC / 'dual_end_spatial.c', CODEC / 'dual_end_wiener.c', CODEC / 'dual_end_mvdr.c'],
         tmp_path, extra_includes=(CODEC / 'include',))
     _run([str(exe)], cwd=tmp_path, env=env)

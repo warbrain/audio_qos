@@ -91,13 +91,14 @@ bool identity_for(std::string_view family, unsigned expected_parts, unsigned par
             else if (*event_text == "audio.capture_health") event_parts = 18;
             else if (*event_text == "audio.owner_timing") event_parts = 17;
             else if (*event_text == "audio.dispatch") event_parts = 17;
+            else if (*event_text == "audio.mvdr") event_parts = 8;
         }
         if (!event_parts || expected_parts != event_parts ||
             !exact_unsigned(payload.find("schema"), 1) || !boot_value(payload.find("boot_id")) ||
             !exact_unsigned(payload.find("part"), part)) return false;
         std::uint32_t role = 0, mode = 0;
         if (!unsigned_value(payload.find("role"), role) || role != 0 ||
-            !unsigned_value(payload.find("m"), mode) || mode > 5 ||
+            !unsigned_value(payload.find("m"), mode) || mode > 6 ||
             !unsigned_identity(payload, "role", identity) ||
             !unsigned_identity(payload, "session_id", identity) ||
             !unsigned_identity(payload, "seq", identity) ||

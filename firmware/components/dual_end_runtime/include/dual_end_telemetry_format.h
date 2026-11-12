@@ -8,6 +8,7 @@
  * part carries boot/role/session/seq, so incomplete or mixed groups are unknown.
  * All formatting is low-priority work, never invoked by the audio producer. */
 #define DUAL_END_SPATIAL_TELEMETRY_PARTS 15U
+#define DUAL_END_MVDR_TELEMETRY_PARTS 8U
 #define DUAL_END_RX_TELEMETRY_PARTS 6U
 #define DUAL_END_TELEMETRY_JSON_BYTES 181U /* <=180 payload plus terminating NUL */
 typedef struct {

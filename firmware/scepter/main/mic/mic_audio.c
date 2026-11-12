@@ -1057,6 +1057,7 @@ static void mic_pipeline_close_window(uint64_t now_us)
      * spatial producer sequence as this closed pipeline sequence. */
     dual_end_spatial_telemetry_t spatial_at_close;
     mic_wiener_diagnostics_t wiener_at_close = {0};
+    mic_mvdr_diagnostics_t mvdr_at_close = {0};
     portENTER_CRITICAL(&s_config_lock);
     spatial_at_close=s_spatial_telemetry;
     if ((s_spatial->stats.mode == DUAL_END_SPATIAL_DAS_WIENER ||
@@ -1074,6 +1075,22 @@ static void mic_pipeline_close_window(uint64_t now_us)
             wiener_at_close.queue_underflows[1] = s_spatial->wiener_right.queue_underflows;
             wiener_at_close.queue_overflows[1] = s_spatial->wiener_right.queue_overflows;
         }
+    }
+    if (s_spatial->stats.mode == DUAL_END_SPATIAL_MASK_MVDR &&
+        s_spatial->stats.generation == spatial_at_close.generation) {
+        const dual_end_mvdr_t *mvdr = &s_spatial->mvdr;
+        mvdr_at_close = (mic_mvdr_diagnostics_t){
+            .available = true,
+            .noise_valid = mvdr->noise_valid,
+            .fallback = mvdr->fallback,
+            .speech_mask_q15 = mvdr->speech_mask_q15,
+            .processed_hops = mvdr->processed_hops,
+            .valid_bins = mvdr->valid_bins,
+            .fallback_bins = mvdr->fallback_bins,
+            .fallback_hops = mvdr->fallback_hops,
+            .queue_underflows = mvdr->queue_underflows,
+            .queue_overflows = mvdr->queue_overflows,
+        };
     }
     portEXIT_CRITICAL(&s_config_lock);
     mic_pipeline_telemetry_t snapshot=s_pipeline_window;
@@ -1129,6 +1146,7 @@ static void mic_pipeline_close_window(uint64_t now_us)
         .pipeline=snapshot,
         .spatial=spatial_at_close,
         .wiener=wiener_at_close,
+        .mvdr=mvdr_at_close,
     };
     /* Publish the complete immutable bundle in one short copy.  Its spatial
      * sequence remains untouched; cache_sequence is the only valid join key. */
@@ -2286,7 +2304,7 @@ static void mic_audio_task(void *arg)
 
 esp_err_t mic_audio_init(void)
 {
-    /* The spatial state costs ~35 KB and is only touched by modes 1..5; keep it
+    /* The fixed-memory spatial state is used by modes 1..6; keep it
      * in PSRAM so the default bypass capture leaves internal RAM free. */
     s_spatial = heap_caps_calloc(1, sizeof(*s_spatial), MALLOC_CAP_SPIRAM);
     ESP_RETURN_ON_FALSE(s_spatial != NULL, ESP_ERR_NO_MEM, TAG,

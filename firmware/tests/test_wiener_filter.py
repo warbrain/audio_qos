@@ -137,7 +137,7 @@ int main(void) {
 }
 ''', encoding="utf-8")
     exe, env = _build_host_executable(
-        [harness, CODEC / "dual_end_spatial.c", CODEC / "dual_end_wiener.c"], tmp_path,
+        [harness, CODEC / "dual_end_spatial.c", CODEC / "dual_end_wiener.c", CODEC / "dual_end_mvdr.c"], tmp_path,
         extra_includes=(CODEC / "include",),
     )
     assert "PASS" in _run([str(exe)], cwd=tmp_path, env=env).stdout

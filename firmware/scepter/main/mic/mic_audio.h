@@ -65,7 +65,8 @@ void mic_audio_set_motor_active(bool active);
  * by the bounded control worker; the 20 ms audio owner only commits local DSP
  * state at a frame boundary. Capabilities 16: bit0 G722/bit1 Opus, read-only v2.
  * DSP v3:17 capabilities;18 requested mode RW;19 applied mode;20 layout;
- * 21 current fallback;22 applied spatial generation. Defaults preserve stereo. */
+ * 21 current fallback;22 applied spatial generation. Mode 6 is soft-mask MVDR
+ * and reports dual-mono layout; default mode 0 preserves stereo. */
 esp_err_t mic_audio_parameter(bool write, uint8_t item, uint16_t value, uint16_t *actual);
 
 /* io0..7: depth, highwater, DMA overflow, overload stops, diag drops, deadlines, IO/processing stack bytes. */

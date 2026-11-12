@@ -15,7 +15,8 @@ esp_err_t scepter_diagnostics_start(void);
  *   SCEPTER_TELEMETRY <token> <kind> <part>
  * kind: 0=spatial, 1=pipeline, 2=capture_health, 3=owner_timing, 4=nlms,
  *       5=wiener (mode 4 cumulative state or mode 5 independent L/R state;
- *       unavailable outside Wiener modes), 6=dispatch (PCM slot/ring state).
+ *       unavailable outside Wiener modes), 6=dispatch (PCM slot/ring state),
+ *       7=MVDR (mask/covariance/queue health; unavailable outside mode 6).
  * Successful part responses carry run/arm/ctx/cache plus boot/session/codec/
  * mode/generation/capture_generation before the original JSON event.  Hosts
  * must group multipart records by those identity fields and retry if any

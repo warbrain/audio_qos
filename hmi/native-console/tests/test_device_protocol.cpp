@@ -45,7 +45,7 @@ std::string scepter_audio_event(std::string_view event, unsigned part, unsigned 
     return "{\"event\":\"" + std::string(event) +
         "\",\"schema\":1,\"boot_id\":\"2e4523d4\",\"role\":0,\"session_id\":42,\"seq\":" +
         std::to_string(sequence) + ",\"part\":" + std::to_string(part) +
-        ",\"c\":5,\"m\":0" +
+        ",\"c\":5,\"m\":" + std::to_string(event == "audio.mvdr" ? 6 : 0) +
         (part == 0 ? ",\"part_count\":" + std::to_string(parts) : "") + "}";
 }
 
@@ -136,7 +136,8 @@ HMI_TEST(device_protocol_accepts_pipeline_capture_and_owner_timing_snapshots)
 {
     const std::pair<std::string_view, unsigned> events[] = {
         {"audio.pipeline", 32}, {"audio.capture_health", 18},
-        {"audio.owner_timing", 17}, {"audio.dispatch", 17}};
+        {"audio.owner_timing", 17}, {"audio.dispatch", 17},
+        {"audio.mvdr", 8}};
     for (const auto &[event, parts] : events)
     {
         SnapshotValidator validator;

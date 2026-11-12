@@ -16,12 +16,14 @@ enum {
     SCEPTER_DIAGNOSTICS_KIND_NLMS = 4U,
     SCEPTER_DIAGNOSTICS_KIND_WIENER = 5U,
     SCEPTER_DIAGNOSTICS_KIND_DISPATCH = 6U,
-    SCEPTER_DIAGNOSTICS_KIND_COUNT = 7U,
+    SCEPTER_DIAGNOSTICS_KIND_MVDR = 7U,
+    SCEPTER_DIAGNOSTICS_KIND_COUNT = 8U,
 };
 
-/* Eight is the maximum: mode 5 emits separate L/R uint64 counter parts so
- * the bounded 180-byte telemetry frame remains valid at the full u64 range. */
+/* Eight is the maximum: mode 5 emits separate L/R counters, and mode 6 emits
+ * the MVDR mask/covariance/queue snapshot in bounded uint64-safe parts. */
 #define SCEPTER_DIAGNOSTICS_WIENER_PARTS 8U
+#define SCEPTER_DIAGNOSTICS_MVDR_PARTS DUAL_END_MVDR_TELEMETRY_PARTS
 
 #define SCEPTER_DIAGNOSTICS_JSON_BUFFER_BYTES DUAL_END_TELEMETRY_JSON_BYTES
 

@@ -9,7 +9,8 @@
  *   win_spatial_wav.exe in.wav out.wav --mode N [--gain F] [--out-ch mono|stereo]
  *
  * Modes (from dual_end_spatial.h):
- *   0 bypass, 1 DAS, 2 NLMS, 3 NLMS stereo, 4 DAS+Wiener, 5 stereo Wiener
+ *   0 bypass, 1 DAS, 2 NLMS, 3 NLMS stereo, 4 DAS+Wiener, 5 stereo Wiener,
+ *   6 soft-mask MVDR
  */
 #include "dual_end_spatial.h"
 
@@ -130,7 +131,7 @@ int main(int argc, char **argv)
     if (argc < 3) {
         fprintf(stderr,
                 "usage: %s in.wav out.wav --mode N [--gain F] [--out-ch mono|stereo]\n"
-                "  modes: 0 bypass, 1 DAS, 2 NLMS, 3 NLMS-stereo, 4 DAS+Wiener, 5 stereo Wiener\n",
+                "  modes: 0 bypass, 1 DAS, 2 NLMS, 3 NLMS-stereo, 4 DAS+Wiener, 5 stereo Wiener, 6 mask-MVDR\n",
                 argv[0]);
         return 64;
     }
@@ -146,13 +147,18 @@ int main(int argc, char **argv)
         else if (strcmp(argv[i], "--out-ch") == 0 && i + 1 < argc) out_stereo = strcmp(argv[++i], "stereo") == 0;
         else { fprintf(stderr, "unknown option %s\n", argv[i]); return 64; }
     }
-    if (mode < 0 || mode > 5) { fprintf(stderr, "mode must be 0..5\n"); return 64; }
+    if (mode < 0 || mode > 6) { fprintf(stderr, "mode must be 0..6\n"); return 64; }
     if (gain <= 0.0 || gain > 64.0) { fprintf(stderr, "gain must be (0, 64]\n"); return 64; }
 
     int16_t *in = NULL;
     size_t frames = 0;
     unsigned channels = 0, rate = 0;
     if (read_wav(in_path, &in, &frames, &channels, &rate) != 0) return 2;
+    if (mode == DUAL_END_SPATIAL_MASK_MVDR && channels != 2U) {
+        fprintf(stderr, "mode 6 requires a two-channel WAV; mono downmix cannot evaluate spatial MVDR\n");
+        free(in);
+        return 64;
+    }
 
     if (gain != 1.0) {
         for (size_t i = 0; i < frames * 2; ++i) {
@@ -195,7 +201,7 @@ int main(int argc, char **argv)
 
     /* Wiener modes add a 512-sample (32 ms) startup queue. Compensate so the
      * output stays time-aligned with the input for ASR evaluation. */
-    const size_t delay = (mode == 4 || mode == 5) ? 512U : 0U;
+    const size_t delay = (mode == 4 || mode == 5 || mode == 6) ? 512U : 0U;
     const size_t out_ch = out_stereo ? 2U : 1U;
     int16_t *final = (int16_t *)calloc(blocks * FRAME_SAMPLES * out_ch, sizeof(int16_t));
     if (!final) { free(in); free(out); return 5; }
@@ -216,11 +222,21 @@ int main(int argc, char **argv)
 
     fprintf(stderr,
             "mode=%ld gain=%.3f in_frames=%zu out_ch=%u delay=%zu frames=%llu "
-            "fallback=%u corr=%.3f tdoa=%.3f wiener_hops=%llu\n",
+            "fallback=%u corr=%.3f tdoa=%.3f wiener_hops=%llu "
+            "mvdr_hops=%llu mvdr_valid_bins=%llu mvdr_fallback_bins=%llu "
+            "mvdr_fallback_hops=%llu mvdr_underflows=%llu mvdr_overflows=%llu "
+            "mvdr_mask_q15=%u\n",
             mode, gain, frames, (unsigned)out_ch, delay,
             (unsigned long long)state.stats.frames, state.stats.fallback,
             state.stats.correlation, state.stats.delay_samples,
-            (unsigned long long)state.wiener.processed_hops);
+            (unsigned long long)state.wiener.processed_hops,
+            (unsigned long long)state.mvdr.processed_hops,
+            (unsigned long long)state.mvdr.valid_bins,
+            (unsigned long long)state.mvdr.fallback_bins,
+            (unsigned long long)state.mvdr.fallback_hops,
+            (unsigned long long)state.mvdr.queue_underflows,
+            (unsigned long long)state.mvdr.queue_overflows,
+            (unsigned)state.mvdr.speech_mask_q15);
 
     free(in);
     free(out);

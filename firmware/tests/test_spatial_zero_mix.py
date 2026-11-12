@@ -36,7 +36,7 @@ def zero_mix_comparison(tmp_path_factory):
         _counted_source(ROOT / 'tests/reference/dual_end_spatial_0511.c', 'reference_predictions'),
         encoding='utf-8')
     executable, env = _build_host_executable(
-        [ROOT / 'tests/test_spatial_zero_mix.c', reference, actual, CODEC / 'dual_end_wiener.c'], build_dir,
+        [ROOT / 'tests/test_spatial_zero_mix.c', reference, actual, CODEC / 'dual_end_wiener.c', CODEC / 'dual_end_mvdr.c'], build_dir,
         extra_includes=(CODEC / 'include',))
     return executable, env, build_dir
 

@@ -122,3 +122,40 @@ The SDK's public `ESP_OPUS_ENC_APPLICATION_LOWDELAY` setting maps to standard Op
 This is a computational-profile change, not proof of improved audio or ASR quality. Hardware acceptance must verify approximately 50 frames/s, the full pipeline's wall-time budget (including preemption), no recurring all-zero intervals, and paired speech/ASR quality against G.722 and the earlier profile. Desktop codec timing or stub tests cannot establish ESP32 performance. Cache sizes and the 40 KiB microphone stack are retained; codec states are not forced into scarce internal RAM.
 
 `tests/test_opus_profile_realtime.py` compiles the actual wrapper with explicit SDK mocks and exercises configuration, both-channel preparation failures, persistent scratch cleanup, strict 80-byte output and decoder packet compatibility. No codec DSP, device connection, recording or playback occurs in these tests.
+
+## Dual-microphone soft-mask MVDR (mode 6, experimental; 0.5.25)
+
+Mode 6 consumes the original L/R channels and emits the MVDR beamformer output
+as dual mono (layout 1), before the existing G.722/Opus encoder. It uses the
+same DSP v3 item 18 transaction as modes 0..5. Capability bit 5 (value 32)
+advertises the implementation; item 17 remains the capability intersection
+across the Scepter and Dongle. Mode 6 is opt-in, resets at the existing
+complete-PCM boundary, and does not change the default mode or NVS.
+
+This firmware candidate uses a 512-point Hann STFT at 16 kHz with a 256-sample
+hop. A per-bin energy-ratio soft mask is estimated against an asymmetric,
+signal-tracked noise floor; complementary masks update smoothed 2x2 speech and
+noise covariance matrices. The dominant speech-covariance eigenvector supplies
+the steering vector, and a diagonally loaded complex 2x2 MVDR solve produces a
+mono spectrum. This is a lightweight, non-neural mask estimator; it does not
+require VAD or model weights. Bounded weights and equal-channel/healthy-channel
+fallbacks cover warm-up, low energy, clipping, dead-channel and numeric-invalid
+conditions. A 512-sample startup queue adds 32 ms of algorithmic latency, like
+the Wiener path.
+
+State and FFT workspaces are fixed-size and live in the existing PSRAM spatial
+owner allocation. No per-frame allocation, new task, queue copy or blocking
+lock is added. `audio.pipeline` mode 6 records complete spatial-call time in
+its existing `s` metric. `SCEPTER_TELEMETRY <token> 7 <part>` exposes the new
+eight-part `audio.mvdr` snapshot: mode availability/fallback, noise-mask state,
+processed hops, valid/fallback bin decisions, fallback hops, mean soft-mask
+Q15 and output-queue underflow/overflow. Counters are captured with the same
+immutable window identity as pipeline telemetry.
+
+The host DSP tool and paired evaluator accept mode 6 and require two-channel
+16 kHz PCM. The evaluator passes the untouched stereo WAV into firmware DSP
+and only downmixes the enhanced result for Qwen. Synthetic host checks establish
+numerical and stream safety only. Mode 6 has not yet been measured against the
+ESP32 20 ms deadline, physically captured in a room, or scored by Qwen; it is
+not promoted as an ASR improvement. The nominal PCB spacing is 20 mm, but
+microphone phase/amplitude responses are not calibrated.

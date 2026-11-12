@@ -55,6 +55,7 @@ std::string_view scepter_event_for_kind(int kind) noexcept
     case 2: return "audio.capture_health";
     case 3: return "audio.owner_timing";
     case 6: return "audio.dispatch";
+    case 7: return "audio.mvdr";
     default: return {};
     }
 }
@@ -348,8 +349,8 @@ struct Telemetry::Impl
             // Keep each multipart firmware snapshot inside one short cache
             // window. Prioritize one family per poll; queuing all families
             // behind the base/performance requests can cross that boundary.
-            constexpr unsigned counts[] = {32, 18, 17, 17};
-            constexpr int kinds[] = {1, 2, 3, 6};
+            constexpr unsigned counts[] = {32, 18, 17, 17, 8};
+            constexpr int kinds[] = {1, 2, 3, 6, 7};
             const auto index = node.scepter_diagnostic_cursor++ % std::size(counts);
             append_group(node, "SCEPTER_TELEMETRY", counts[index], kinds[index], 0, true);
         }

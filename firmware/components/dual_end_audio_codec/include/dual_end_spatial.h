@@ -2,6 +2,7 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
+#include "dual_end_mvdr.h"
 #include "dual_end_wiener.h"
 
 /* Portable 16 kHz/20 ms owner-only processing; no allocation, RTOS or DMA.
@@ -9,18 +10,21 @@
  * Mode 0 is bit-exact stereo bypass; fused modes explicitly emit dual mono.
  * Mode 3 preserves aligned left and NLMS-matched right separately, without DAS.
  * Mode 4 adds a fixed-memory spectral Wiener post-filter to fused DAS.
- * Mode 5 applies independent fixed-memory Wiener filters to L and R. */
-#define DUAL_END_SPATIAL_CAPABILITIES 31U /* bit 3 DAS+Wiener; bit 4 independent stereo Wiener */
+ * Mode 5 applies independent fixed-memory Wiener filters to L and R.
+ * Mode 6 is a dual-channel soft-mask MVDR beamformer with mono output. */
+#define DUAL_END_SPATIAL_CAPABILITIES 63U /* bits 3/4/5: DAS Wiener, stereo Wiener, mask MVDR */
 #define DUAL_END_SPATIAL_FRAME_SAMPLES 320U
 #define DUAL_END_SPATIAL_TAPS 64U
 #define DUAL_END_SPATIAL_MAX_DELAY (0.020f * 16000.0f / 343.0f)
 enum { DUAL_END_SPATIAL_BYPASS=0, DUAL_END_SPATIAL_DAS=1,
     DUAL_END_SPATIAL_NLMS=2, DUAL_END_SPATIAL_NLMS_STEREO=3,
-    DUAL_END_SPATIAL_DAS_WIENER=4, DUAL_END_SPATIAL_WIENER_STEREO=5 };
+    DUAL_END_SPATIAL_DAS_WIENER=4, DUAL_END_SPATIAL_WIENER_STEREO=5,
+    DUAL_END_SPATIAL_MASK_MVDR=6 };
 enum { DUAL_END_LAYOUT_STEREO=0, DUAL_END_LAYOUT_DUAL_MONO=1 };
 /* Numeric modes 0..2 and their capability requirements are a legacy contract.
  * Mode 3 requires its stereo-NLMS bit; mode 4 requires DAS + Wiener; mode 5
- * requires the separate independent-stereo-Wiener capability bit. */
+ * requires the separate independent-stereo-Wiener capability bit; mode 6
+ * requires capability bit 5 for the mask-based MVDR implementation. */
 static inline bool dual_end_spatial_mode_supported(uint16_t mode, uint16_t caps) {
     switch(mode) {
         case DUAL_END_SPATIAL_BYPASS:return true;
@@ -29,12 +33,13 @@ static inline bool dual_end_spatial_mode_supported(uint16_t mode, uint16_t caps)
         case DUAL_END_SPATIAL_NLMS_STEREO:return (caps & 4U)==4U;
         case DUAL_END_SPATIAL_DAS_WIENER:return (caps & 9U)==9U;
         case DUAL_END_SPATIAL_WIENER_STEREO:return (caps & 16U)==16U;
+        case DUAL_END_SPATIAL_MASK_MVDR:return (caps & 32U)==32U;
         default:return false;
     }
 }
 static inline uint16_t dual_end_spatial_mode_layout(uint16_t mode) {
     return mode==DUAL_END_SPATIAL_DAS || mode==DUAL_END_SPATIAL_NLMS ||
-        mode==DUAL_END_SPATIAL_DAS_WIENER ?
+        mode==DUAL_END_SPATIAL_DAS_WIENER || mode==DUAL_END_SPATIAL_MASK_MVDR ?
         DUAL_END_LAYOUT_DUAL_MONO : DUAL_END_LAYOUT_STEREO;
 }
 enum { DUAL_END_SPATIAL_OK=0, DUAL_END_SPATIAL_LOW_ENERGY=1,
@@ -55,6 +60,7 @@ typedef struct {
     dual_end_spatial_stats_t stats;
     dual_end_wiener_t wiener;
     dual_end_wiener_t wiener_right;
+    dual_end_mvdr_t mvdr;
     int16_t wiener_channel_pcm[2U * DUAL_END_SPATIAL_FRAME_SAMPLES];
     float previous[2], coefficients[DUAL_END_SPATIAL_TAPS];
     float history[DUAL_END_SPATIAL_TAPS], history_power;

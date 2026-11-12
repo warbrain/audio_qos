@@ -55,6 +55,7 @@ SPATIAL_MODE_LABELS = {
     3: "Independent stereo NLMS",
     4: "DAS + Wiener",
     5: "Independent stereo Wiener",
+    6: "Dual-channel soft-mask MVDR",
 }
 
 
@@ -148,8 +149,8 @@ def load_manifest(path: Path) -> list[Item]:
     return items
 
 
-def read_wav_mono16k(path: Path, downmix: str = "mean") -> np.ndarray:
-    """16-bit PCM WAV -> float64 in [-1, 1], with an explicit stereo downmix."""
+def read_wav_channels16k(path: Path) -> np.ndarray:
+    """Read 16-bit 16 kHz PCM as frames x channels without losing spatial data."""
     import wave
 
     with wave.open(str(path), "rb") as w:
@@ -160,21 +161,30 @@ def read_wav_mono16k(path: Path, downmix: str = "mean") -> np.ndarray:
     if rate != SAMPLE_RATE:
         raise SystemExit(f"{path}: expected 16 kHz, got {rate} Hz")
     x = np.frombuffer(raw, dtype="<i2").astype(np.float64) / 32768.0
-    if ch == 1:
-        return x
-    stereo = x.reshape(-1, ch)
+    return x.reshape(-1, ch)
+
+
+def downmix_channels(channels: np.ndarray, downmix: str = "mean") -> np.ndarray:
+    """Apply an explicit mono rule after spatial DSP, or for level analysis."""
+    if channels.ndim != 2 or channels.shape[1] == 1:
+        return channels.reshape(-1)
     if downmix == "left":
-        return stereo[:, 0]
+        return channels[:, 0]
     if downmix == "right":
-        return stereo[:, 1]
+        return channels[:, 1]
     if downmix == "best":
         # Pick the healthier speech channel: lowest clipping first, then RMS.
         def score(c: int) -> tuple[bool, float]:
-            track = stereo[:, c]
+            track = channels[:, c]
             clip = float(np.mean(np.abs(track) >= 0.999))
             return (clip < 0.001, float(np.sqrt(np.mean(track ** 2))))
-        return stereo[:, max(range(ch), key=score)]
-    return stereo.mean(axis=1)
+        return channels[:, max(range(channels.shape[1]), key=score)]
+    return channels.mean(axis=1)
+
+
+def read_wav_mono16k(path: Path, downmix: str = "mean") -> np.ndarray:
+    """16-bit PCM WAV -> float64 mono; spatial modes receive the original WAV."""
+    return downmix_channels(read_wav_channels16k(path), downmix)
 
 
 def apply_frame_drops(x: np.ndarray, drop_rate: float, conceal: str,
@@ -635,8 +645,9 @@ def pattern_report(summary: dict, rows: list[dict], conditions: list[Condition],
             "manifest": str(args.manifest.resolve()), "manifest_sha256": sha256_file(args.manifest),
             "source_items": len(items), "noise_pattern_fields": "derived from stable sample IDs; unknown IDs remain unclassified",
             "inputs": input_metadata,
-            "dsp_input_channels": 1,
-            "spatial_assessment": "The evaluator sends mono to the DSP tool. Inter-channel spatial processing is not evaluated; mode 0 versus mode 4 is a single-channel combined-path comparison, not an isolated DAS measurement.",
+            "dsp_input_channels": 2 if any(condition.mode == 6 for condition in conditions) else
+                                 (input_metadata[0]["channels"] if input_metadata else None),
+            "spatial_assessment": "The evaluator passes the source WAV to production DSP without pre-downmixing. Mode 6 requires stereo 16 kHz PCM and uses both microphone channels; ASR receives the enhanced mono downmix. Mode 0/4 comparisons retain their existing meanings.",
             "physical_device_tested": False, "audio_capture_performed": False,
             "interpretation": "Offline firmware-source DSP and Qwen3-ASR comparison; CER is character-based and primary. WER uses whitespace tokens and is coarse for unsegmented Chinese. This is not a device, microphone, TASCAM routing, or enclosure measurement.",
         },
@@ -655,7 +666,7 @@ def main(argv: Iterable[str] | None = None) -> int:
                     help="HMI Qwen3-ASR model (default <project>/src-tauri/native/models/asr.gguf)")
     ap.add_argument("--vad-path", type=Path, default=None,
                     help="HMI VAD asset path; VAD is disabled for this offline comparison")
-    ap.add_argument("--modes", default="0,4", help="spatial modes (default 0,4)")
+    ap.add_argument("--modes", default="0,4,6", help="spatial modes (default 0,4,6; mode 6 requires stereo input)")
     ap.add_argument("--gains", default="1", help="fixed gain sweep, e.g. 1,4,16 (default 1)")
     ap.add_argument("--level-normalize", choices=("none", "input", "dbfs"), default="none",
                     help="none = keep the condition's own level; input = match the source RMS; "
@@ -731,6 +742,13 @@ def main(argv: Iterable[str] | None = None) -> int:
     codecs = [x.strip() for x in args.codec_sims.split(",") if x.strip()]
     if not modes or not gains or not drops or not conceals or not codecs:
         raise SystemExit("empty --modes/--gains/--drop-rates/--conceals/--codec-sims")
+    if any(mode < 0 or mode > 6 for mode in modes):
+        raise SystemExit("spatial modes must be in 0..6")
+    if 6 in modes:
+        mono_items = [item.uid for item in items if wav_metadata(item.wav)["channels"] != 2]
+        if mono_items:
+            raise SystemExit("mode 6 requires physical two-channel WAV inputs; mono samples: " +
+                             ", ".join(mono_items[:8]))
     for c in conceals:
         if c not in ("zero", "repeat"):
             raise SystemExit(f"unknown conceal strategy: {c}")
@@ -781,10 +799,11 @@ def main(argv: Iterable[str] | None = None) -> int:
             f32_out = work / f"{stem}.f32"
             stats = run_dsp_tool(args.tool, item.wav, wav_out, cond.mode, cond.gain)
 
-            src = read_wav_mono16k(item.wav, args.downmix)
+            source_channels = read_wav_channels16k(item.wav)
+            src = downmix_channels(source_channels, args.downmix)
             # Clipping happens at the gain stage, before any spatial/Wiener work,
             # so measure it on the source scaled by the condition's gain.
-            clip_pct = float(np.mean(np.abs(src) * cond.gain >= 0.999)) * 100.0 if src.size else 0.0
+            clip_pct = float(np.mean(np.any(np.abs(source_channels) * cond.gain >= 0.999, axis=1))) * 100.0 if src.size else 0.0
 
             pcm = read_wav_mono16k(wav_out, args.downmix)
             # Normalise level BEFORE injecting loss: otherwise the zero-fill
@@ -894,6 +913,7 @@ def main(argv: Iterable[str] | None = None) -> int:
         for relative in (
             Path("components/dual_end_audio_codec/dual_end_spatial.c"),
             Path("components/dual_end_audio_codec/dual_end_wiener.c"),
+            Path("components/dual_end_audio_codec/dual_end_mvdr.c"),
         ):
             source = Path(__file__).parents[2] / relative
             firmware_sources.append({

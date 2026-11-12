@@ -15,7 +15,8 @@ if (-not (Test-Path -LiteralPath $codec)) { throw "firmware codec component not 
 $src = @(
     (Join-Path $here 'win_spatial_wav.c'),
     (Join-Path $codec 'dual_end_spatial.c'),
-    (Join-Path $codec 'dual_end_wiener.c')
+    (Join-Path $codec 'dual_end_wiener.c'),
+    (Join-Path $codec 'dual_end_mvdr.c')
 )
 $buildRoot = Join-Path $Firmware 'build\asr-eval-host'
 $out = Join-Path $buildRoot 'bin'
