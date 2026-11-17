@@ -330,11 +330,11 @@ int main(void) {
         assert(enc[codec_index][0].calls>=1 && enc[codec_index][1].history!=0);
         assert(memcmp(last_packet.payload.audio+(codec==3 ? 4 : 0),
                       last_packet.payload.audio+(codec==3 ? 84 : 160),codec==3 ? 80 : 160));
-        /* New NLMS-only mode retains separate microphone outputs. The real
+        /* Stereo Wiener (mode 5) retains separate microphone outputs. The real
          * kernel's layout drives two SDK calls even while channels converge;
          * it must never take the fused-mode one-encoder shortcut. */
         dual_end_spatial_t spatial;
-        assert(dual_end_spatial_reset(&spatial,DUAL_END_SPATIAL_NLMS_STEREO,9));
+        assert(dual_end_spatial_reset(&spatial,DUAL_END_SPATIAL_WIENER_STEREO,9));
         assert(dual_end_audio_sender_set_processing_layout((uint8_t)spatial.stats.layout)==ESP_OK);ready();
         unsigned stereo_calls=sdk_calls[codec_index];
         fill(pcm,0,true);assert(dual_end_spatial_process(&spatial,pcm,320));
@@ -421,7 +421,7 @@ int main(void) {
 ''', encoding="utf-8")
     exe, env = _build_host_executable(
         [harness, ROOT / "components/dual_end_audio_recovery/audio_recovery_tx.c",
-         CODEC / "dual_end_spatial.c", CODEC / "dual_end_wiener.c", CODEC / "dual_end_mvdr.c"],
+         CODEC / "dual_end_spatial.c", CODEC / "dual_end_wiener.c"],
         tmp_path, extra_includes=(stubs, CODEC / "include", SENDER / "include",
                                  ROOT / "components/dual_end_runtime/include"))
     result = _run([str(exe)], cwd=tmp_path, env=env)

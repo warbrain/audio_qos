@@ -39,6 +39,7 @@ size_t dual_end_spatial_telemetry_format(const dual_end_spatial_telemetry_t *r,
     case 5:if(r->frames)n=snprintf(out,left,",\"current_mix\":%.6f,\"mean_mix\":%.6f}",(double)r->current_mix,(double)r->mix_q16_sum/(double)r->frames/65535.0);else n=snprintf(out,left,",\"current_mix\":%.6f,\"mean_mix\":null}",(double)r->current_mix);break;
     case 6:n=snprintf(out,left,",\"frames\":\"%" PRIu64 "\"}",r->frames);break;
     case 7:n=snprintf(out,left,",\"learned_frames\":\"%" PRIu64 "\"}",r->learned_frames);break;
+    /* LEGACY: frozen/mixed frames and bounded_updates no longer advance (DAS/NLMS removed in 0.5.27); emitted as 0 for wire compatibility. */
     case 8:n=snprintf(out,left,",\"frozen_frames\":\"%" PRIu64 "\"}",r->frozen_frames);break;
     case 9:n=snprintf(out,left,",\"mixed_frames\":\"%" PRIu64 "\"}",r->mixed_frames);break;
     case 10:n=snprintf(out,left,",\"nlms_fallback_frames\":\"%" PRIu64 "\"}",r->nlms_fallback_frames);break;

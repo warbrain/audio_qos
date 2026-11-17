@@ -11,6 +11,7 @@ ROOT = Path(__file__).resolve().parents[1]
 CODEC = ROOT / 'components/dual_end_audio_codec'
 
 @pytest.mark.parametrize('mode', [0, 1, 2])
+@pytest.mark.skip(reason="compares DAS/NLMS matcher state against the 0510 reference; the matcher and its state were removed in 0.5.27")
 def test_exact_pcm_and_matcher_state_against_0510(tmp_path, mode):
     reference = tmp_path / 'reference.c'
     reference.write_text(
@@ -74,11 +75,12 @@ int main(void) {
     return 0;
 }
 '''.replace('MODE_VALUE', str(mode)), encoding='utf-8')
-    exe, env = _build_host_executable([harness, reference, CODEC / 'dual_end_spatial.c', CODEC / 'dual_end_wiener.c', CODEC / 'dual_end_mvdr.c'], tmp_path,
+    exe, env = _build_host_executable([harness, reference, CODEC / 'dual_end_spatial.c', CODEC / 'dual_end_wiener.c'], tmp_path,
         extra_includes=(CODEC / 'include',))
     assert 'PASS' in _run([str(exe)], cwd=tmp_path, env=env).stdout
 
 
+@pytest.mark.skip(reason="mode 3 (NLMS stereo) removed in 0.5.27; only bypass and stereo Wiener remain")
 def test_independent_nlms_stereo_keeps_channels_and_legacy_matcher(tmp_path):
     """Real kernel: no DAS sum, same safe matcher, explicit stereo contract.
 
@@ -200,7 +202,7 @@ int main(void) {
     return 0;
 }
 ''', encoding='utf-8')
-    exe, env = _build_host_executable([harness, CODEC / 'dual_end_spatial.c', CODEC / 'dual_end_wiener.c', CODEC / 'dual_end_mvdr.c'], tmp_path,
+    exe, env = _build_host_executable([harness, CODEC / 'dual_end_spatial.c', CODEC / 'dual_end_wiener.c'], tmp_path,
         extra_includes=(CODEC / 'include',))
     assert 'PASS' in _run([str(exe)], cwd=tmp_path, env=env).stdout
 
@@ -236,6 +238,6 @@ int main(void) {
 '''.replace('MODE_VALUE', str(mode)).replace('EXPECTED_CHANNELS', str(channels))
        .replace('EXPECTED_CLOCK_CALLS', str(clock_calls)), encoding='utf-8')
     exe, env = _build_host_executable(
-        [harness, CODEC / 'dual_end_spatial.c', CODEC / 'dual_end_wiener.c', CODEC / 'dual_end_mvdr.c'],
+        [harness, CODEC / 'dual_end_spatial.c', CODEC / 'dual_end_wiener.c'],
         tmp_path, extra_includes=(CODEC / 'include',))
     _run([str(exe)], cwd=tmp_path, env=env)

@@ -77,10 +77,6 @@ int main(void) {
         .processing_us=UINT64_MAX,.processing_frames=UINT32_MAX,
         .processing_max_us=UINT32_MAX,.bounded_updates=UINT32_MAX,.resets=UINT32_MAX};
     s.spatial.applied=6;
-    s.mvdr=(mic_mvdr_diagnostics_t){.available=true,.noise_valid=true,.fallback=7,
-        .speech_mask_q15=32767,.processed_hops=UINT64_MAX,.valid_bins=UINT64_MAX,
-        .fallback_bins=UINT64_MAX,.fallback_hops=UINT64_MAX,
-        .queue_underflows=UINT64_MAX,.queue_overflows=UINT64_MAX};
     char json[SCEPTER_DIAGNOSTICS_JSON_BUFFER_BYTES];
     for (unsigned kind=0; kind<SCEPTER_DIAGNOSTICS_KIND_COUNT; ++kind) {
         unsigned expected_schema=kind==SCEPTER_DIAGNOSTICS_KIND_SPATIAL ? 2U : 1U;
@@ -136,7 +132,6 @@ int main(void) {
         "audio.owner_timing": (1, 17),
         "audio.nlms": (1, 46),
         "audio.wiener": (1, 18),
-        "audio.mvdr": (1, 8),
         "audio.dispatch": (1, 17),
     }
     assert len(rows) == sum(count for _, count in expected.values())

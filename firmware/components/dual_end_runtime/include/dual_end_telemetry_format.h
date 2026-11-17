@@ -19,6 +19,9 @@ typedef struct {
     uint16_t generation, requested, applied, layout, fallback;
     bool polarity_inverted;
     float delay_samples, correlation, current_mix;
+    /* frozen_frames/mixed_frames and bounded_updates below are LEGACY DAS/NLMS
+     * counters: those algorithms were removed in 0.5.27, so they stay 0. They
+     * remain on the wire so the spatial telemetry part layout does not change. */
     uint64_t frames, learned_frames, frozen_frames, mixed_frames;
     uint64_t nlms_fallback_frames, mix_q16_sum, processing_us;
     uint32_t processing_frames, processing_max_us, bounded_updates, resets;

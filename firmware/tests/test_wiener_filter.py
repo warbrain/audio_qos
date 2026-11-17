@@ -87,17 +87,7 @@ int main(void) {
            input_snr,output_snr,output_snr-input_snr,noise_energy);
     assert(output_snr-input_snr>0.5);
 
-    assert(dual_end_spatial_reset(&spatial,4U,23U));
-    assert(spatial.stats.layout==DUAL_END_LAYOUT_DUAL_MONO);
-    for(unsigned base=0;base<2560U;base+=320U) {
-        int16_t block[640];
-        for(unsigned i=0;i<320U;++i) block[2U*i]=block[2U*i+1U]=input[base+i];
-        assert(dual_end_spatial_process(&spatial,block,320U));
-        for(unsigned i=0;i<320U;++i)assert(block[2U*i]==block[2U*i+1U]);
-    }
-    assert(spatial.stats.mode==4U && spatial.stats.frames==2560U);
-    assert(spatial.wiener.processed_hops==10U); /* 2560 / 256, including startup */
-    assert(spatial.wiener.queue_underflows==0 && spatial.wiener.queue_overflows==0);
+    /* Mode 4 (DAS+Wiener) was removed in 0.5.27 together with the DAS path; only bypass (0) and stereo Wiener (5) remain. */
 
     assert(dual_end_spatial_reset(&spatial,5U,24U));
     assert(spatial.stats.layout==DUAL_END_LAYOUT_STEREO);
@@ -132,12 +122,12 @@ int main(void) {
     assert(!dual_end_wiener_process(&state,invalid,319U));
     assert(!memcmp(&state,&before,sizeof(state)));
     assert(!memcmp(invalid,invalid_before,sizeof(invalid)));
-    puts("PASS: bounded Wiener stream; mode 4 dual mono; mode 5 keeps independent L/R Wiener states; 32 ms alignment and queue health");
+    puts("PASS: bounded Wiener stream; mode 5 keeps independent L/R Wiener states; queue health");
     return 0;
 }
 ''', encoding="utf-8")
     exe, env = _build_host_executable(
-        [harness, CODEC / "dual_end_spatial.c", CODEC / "dual_end_wiener.c", CODEC / "dual_end_mvdr.c"], tmp_path,
+        [harness, CODEC / "dual_end_spatial.c", CODEC / "dual_end_wiener.c"], tmp_path,
         extra_includes=(CODEC / "include",),
     )
     assert "PASS" in _run([str(exe)], cwd=tmp_path, env=env).stdout

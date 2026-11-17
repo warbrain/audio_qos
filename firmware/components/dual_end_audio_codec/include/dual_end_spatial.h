@@ -2,7 +2,6 @@
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-#include "dual_end_mvdr.h"
 #include "dual_end_wiener.h"
 
 /* Portable 16 kHz/20 ms owner-only processing; no allocation, RTOS or DMA.
@@ -12,7 +11,11 @@
  * Mode 4 adds a fixed-memory spectral Wiener post-filter to fused DAS.
  * Mode 5 applies independent fixed-memory Wiener filters to L and R.
  * Mode 6 is a dual-channel soft-mask MVDR beamformer with mono output. */
-#define DUAL_END_SPATIAL_CAPABILITIES 63U /* bits 3/4/5: DAS Wiener, stereo Wiener, mask MVDR */
+/* Release: bypass (0) + stereo Wiener (5) only.
+ * Measured on 2x196 independent clips: stereo Wiener improved CER by 2.8 / 7.1 pp,
+ * while DAS/NLMS were significantly worse and the others gave no gain.
+ * Historical mask was 63U (modes 0-5). */
+#define DUAL_END_SPATIAL_CAPABILITIES 16U /* bit4: stereo Wiener only */
 #define DUAL_END_SPATIAL_FRAME_SAMPLES 320U
 #define DUAL_END_SPATIAL_TAPS 64U
 #define DUAL_END_SPATIAL_MAX_DELAY (0.020f * 16000.0f / 343.0f)
@@ -52,6 +55,8 @@ typedef struct {
     uint64_t frames, updated_frames, frozen_frames, mixed_frames;
     /* fallback_frames counts NLMS samples without a coefficient update, not
      * all DAS alignment fallbacks. Current fallback enum applies to the frame. */
+    /* LEGACY: these counters tracked the removed DAS/NLMS matcher and never
+     * advance in 0.5.27. Kept for the telemetry field layout. */
     uint64_t fallback_frames, matching_mix_q16_sum;
     uint32_t bounded_updates, resets;
     bool polarity_inverted;
@@ -60,20 +65,7 @@ typedef struct {
     dual_end_spatial_stats_t stats;
     dual_end_wiener_t wiener;
     dual_end_wiener_t wiener_right;
-    dual_end_mvdr_t mvdr;
     int16_t wiener_channel_pcm[2U * DUAL_END_SPATIAL_FRAME_SAMPLES];
-    float previous[2], coefficients[DUAL_END_SPATIAL_TAPS];
-    float history[DUAL_END_SPATIAL_TAPS], history_power;
-    uint32_t head, history_frames;
-    /* Explicitly consume alignment before the 16-byte-aligned owner scratch;
-     * this keeps strict MSVC host verification free of implicit padding. */
-    uint32_t scratch_alignment_padding[5];
-    /* Scratch lives with the owner state, never on the DMA or task stack. */
-#if defined(_MSC_VER)
-    __declspec(align(16)) float aligned[2][DUAL_END_SPATIAL_FRAME_SAMPLES];
-#else
-    _Alignas(16) float aligned[2][DUAL_END_SPATIAL_FRAME_SAMPLES];
-#endif
 } dual_end_spatial_t;
 typedef struct {
     uint32_t us[2];
@@ -81,10 +73,6 @@ typedef struct {
     bool valid;
 } dual_end_spatial_wiener_timing_t;
 typedef int64_t (*dual_end_spatial_clock_us_fn)(void);
-_Static_assert(offsetof(dual_end_spatial_t, aligned) ==
-    offsetof(dual_end_spatial_t, scratch_alignment_padding) +
-        sizeof(((dual_end_spatial_t *)0)->scratch_alignment_padding),
-    "explicit scratch alignment padding");
 bool dual_end_spatial_reset(dual_end_spatial_t *state, uint16_t mode, uint16_t generation);
 /* Accept exactly a complete interleaved stereo block. Return false without
  * mutation for an invalid argument. Mode 0 returns before touching PCM/state. */

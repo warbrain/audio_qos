@@ -1057,7 +1057,6 @@ static void mic_pipeline_close_window(uint64_t now_us)
      * spatial producer sequence as this closed pipeline sequence. */
     dual_end_spatial_telemetry_t spatial_at_close;
     mic_wiener_diagnostics_t wiener_at_close = {0};
-    mic_mvdr_diagnostics_t mvdr_at_close = {0};
     portENTER_CRITICAL(&s_config_lock);
     spatial_at_close=s_spatial_telemetry;
     if ((s_spatial->stats.mode == DUAL_END_SPATIAL_DAS_WIENER ||
@@ -1075,22 +1074,6 @@ static void mic_pipeline_close_window(uint64_t now_us)
             wiener_at_close.queue_underflows[1] = s_spatial->wiener_right.queue_underflows;
             wiener_at_close.queue_overflows[1] = s_spatial->wiener_right.queue_overflows;
         }
-    }
-    if (s_spatial->stats.mode == DUAL_END_SPATIAL_MASK_MVDR &&
-        s_spatial->stats.generation == spatial_at_close.generation) {
-        const dual_end_mvdr_t *mvdr = &s_spatial->mvdr;
-        mvdr_at_close = (mic_mvdr_diagnostics_t){
-            .available = true,
-            .noise_valid = mvdr->noise_valid,
-            .fallback = mvdr->fallback,
-            .speech_mask_q15 = mvdr->speech_mask_q15,
-            .processed_hops = mvdr->processed_hops,
-            .valid_bins = mvdr->valid_bins,
-            .fallback_bins = mvdr->fallback_bins,
-            .fallback_hops = mvdr->fallback_hops,
-            .queue_underflows = mvdr->queue_underflows,
-            .queue_overflows = mvdr->queue_overflows,
-        };
     }
     portEXIT_CRITICAL(&s_config_lock);
     mic_pipeline_telemetry_t snapshot=s_pipeline_window;
@@ -1146,7 +1129,6 @@ static void mic_pipeline_close_window(uint64_t now_us)
         .pipeline=snapshot,
         .spatial=spatial_at_close,
         .wiener=wiener_at_close,
-        .mvdr=mvdr_at_close,
     };
     /* Publish the complete immutable bundle in one short copy.  Its spatial
      * sequence remains untouched; cache_sequence is the only valid join key. */
@@ -1805,6 +1787,16 @@ static esp_err_t mic_pdm_init(void)
              CONFIG_MIC_OUTPUT_GAIN_X,
              MIC_SOFT_LIMIT_KNEE,
              MIC_SOFT_LIMIT_CEILING);
+    /* Release capability snapshot: lets the field confirm which modes and
+     * codecs this image exposes (see dual_end_spatial.h and
+     * dual_end_link_config.h) instead of inferring from the version string. */
+    ESP_LOGI(TAG,
+             "capabilities: spatial=0x%02x (bypass=1 stereo_wiener=%d) codec=0x%02x (g722=%d opus=%d)",
+             (unsigned)DUAL_END_SPATIAL_CAPABILITIES,
+             (DUAL_END_SPATIAL_CAPABILITIES & 16U) == 16U,
+             (unsigned)DUAL_END_AUDIO_CODEC_CAPABILITIES,
+             (DUAL_END_AUDIO_CODEC_CAPABILITIES & 0x01U) == 0x01U,
+             (DUAL_END_AUDIO_CODEC_CAPABILITIES & 0x06U) != 0U);
     ESP_LOGI(TAG,
              "48k analysis: fixed_calibration=disabled GCC-PHAT=1024"
              " sampled 5Hz available=%u; audio-packet analysis unavailable",
@@ -1934,16 +1926,26 @@ static void mic_audio_task(void *arg)
         MIC_CAPTURE_TASK_STACK,capture_block,6,&s_capture_task,DUAL_END_AUDIO_TASK_CORE);
     /* The transport callback is deliberately below the DSP owner priority.
      * If it cannot keep up, the bounded queue drops a frame rather than making
-     * the PDM/DSP owner wait behind a sender mutex or radio operation. */
+     * the PDM/DSP owner wait behind a sender mutex or radio operation.
+     *
+     * Release 0.5.27 measurement: stereo Wiener (DSP owner, 4.0 ms average /
+     * 8.7 ms max) and G.722 encode (this task, 9.75 ms max) used to share
+     * Core1, summing to ~18.4 ms of the 20 ms frame. Pinning the encode/send
+     * worker to the communication core lets it run in parallel with the DSP
+     * owner instead of behind it. MIC_FRAME_DISPATCH_TASK_CORE keeps the
+     * choice in one place so it can be reverted by a single edit. */
+#ifndef MIC_FRAME_DISPATCH_TASK_CORE
+#define MIC_FRAME_DISPATCH_TASK_CORE DUAL_END_COMM_TASK_CORE
+#endif
 #if MIC_TASK_PSRAM_STACK
     BaseType_t frame_dispatch_ok=capture_ok==pdPASS ? xTaskCreatePinnedToCoreWithCaps(
         mic_frame_dispatch_task_fn,"mic_frame_dispatch",MIC_FRAME_DISPATCH_TASK_STACK,NULL,
-        MIC_FRAME_DISPATCH_TASK_PRIORITY,&s_frame_dispatch_task,DUAL_END_AUDIO_TASK_CORE,
+        MIC_FRAME_DISPATCH_TASK_PRIORITY,&s_frame_dispatch_task,MIC_FRAME_DISPATCH_TASK_CORE,
         MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT) : pdFAIL;
 #else
     BaseType_t frame_dispatch_ok=capture_ok==pdPASS ? xTaskCreatePinnedToCore(
         mic_frame_dispatch_task_fn,"mic_frame_dispatch",MIC_FRAME_DISPATCH_TASK_STACK,NULL,
-        MIC_FRAME_DISPATCH_TASK_PRIORITY,&s_frame_dispatch_task,DUAL_END_AUDIO_TASK_CORE) : pdFAIL;
+        MIC_FRAME_DISPATCH_TASK_PRIORITY,&s_frame_dispatch_task,MIC_FRAME_DISPATCH_TASK_CORE) : pdFAIL;
 #endif
     /* Codec/layout transition may wait on sender preparation, so keep it off
      * the Core1 PCM owner.  This is mandatory: accepting a runtime codec or
@@ -2304,11 +2306,24 @@ static void mic_audio_task(void *arg)
 
 esp_err_t mic_audio_init(void)
 {
-    /* The fixed-memory spatial state is used by modes 1..6; keep it
-     * in PSRAM so the default bypass capture leaves internal RAM free. */
-    s_spatial = heap_caps_calloc(1, sizeof(*s_spatial), MALLOC_CAP_SPIRAM);
-    ESP_RETURN_ON_FALSE(s_spatial != NULL, ESP_ERR_NO_MEM, TAG,
-                        "allocate spatial state in PSRAM");
+    /* Spatial state is 35,280 B after removing the legacy MVDR state (it was
+     * 69,184 B, which left only ~11 KB of internal RAM free). The DSP hot path
+     * touches the two Wiener states every 20 ms frame, so internal RAM avoids
+     * PSRAM cache misses; PSRAM is the fallback when internal RAM is tight.
+     * The struct has _Alignas(16) members, hence the aligned allocation.
+     * This log is the fastest field check for internal RAM headroom. */
+    const size_t spatial_bytes = sizeof(*s_spatial);
+    s_spatial = heap_caps_aligned_alloc(16, spatial_bytes, MALLOC_CAP_INTERNAL | MALLOC_CAP_8BIT);
+    const char *spatial_pool = "internal";
+    if (s_spatial == NULL) {
+        s_spatial = heap_caps_aligned_alloc(16, spatial_bytes, MALLOC_CAP_SPIRAM);
+        spatial_pool = "psram";
+    }
+    ESP_RETURN_ON_FALSE(s_spatial != NULL, ESP_ERR_NO_MEM, TAG, "allocate spatial state");
+    memset(s_spatial, 0, spatial_bytes);
+    ESP_LOGI(TAG, "spatial state: %s %u B, internal_free=%u",
+             spatial_pool, (unsigned)spatial_bytes,
+             (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
     s_mic_state_events = xEventGroupCreate();
     ESP_RETURN_ON_FALSE(s_mic_state_events, ESP_ERR_NO_MEM, TAG, "create state events failed");
 
@@ -2467,9 +2482,9 @@ esp_err_t mic_audio_start(void)
      * Keep the handle to reject accidental duplicate starts until that reset. */
     ESP_RETURN_ON_FALSE(bits & MIC_START_READY_BIT, ESP_ERR_TIMEOUT, TAG,
                         "microphone buffers did not become ready before startup deadline");
-    ESP_LOGI(TAG, "capture ready: stack=%uB storage=%s core=%u",
-        (unsigned)MIC_TASK_STACK_BYTES, MIC_TASK_PSRAM_STACK ? "psram" : "internal",
-        (unsigned)DUAL_END_AUDIO_TASK_CORE);
+    ESP_LOGI(TAG, "capture ready: stack=%uB storage=%s core=%u dispatch_core=%u",
+             (unsigned)MIC_TASK_STACK_BYTES, MIC_TASK_PSRAM_STACK ? "psram" : "internal",
+             (unsigned)DUAL_END_AUDIO_TASK_CORE, (unsigned)MIC_FRAME_DISPATCH_TASK_CORE);
     return ESP_OK;
 }
 
