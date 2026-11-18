@@ -1738,12 +1738,12 @@ static esp_err_t mic_pdm_init(void)
      * codecs this image exposes (see dual_end_spatial.h and
      * dual_end_link_config.h) instead of inferring from the version string. */
     ESP_LOGI(TAG,
-             "capabilities: spatial=0x%02x (bypass=1 stereo_wiener=%d) codec=0x%02x (g722=%d opus=%d)",
+             "capabilities: spatial=0x%02x (default=%u stereo_wiener=%d bypass=reserved) codec=0x%02x (g722=%d)",
              (unsigned)DUAL_END_SPATIAL_CAPABILITIES,
+             (unsigned)MIC_SPATIAL_DEFAULT_MODE,
              (DUAL_END_SPATIAL_CAPABILITIES & 16U) == 16U,
              (unsigned)DUAL_END_AUDIO_CODEC_CAPABILITIES,
-             (DUAL_END_AUDIO_CODEC_CAPABILITIES & 0x01U) == 0x01U,
-             (DUAL_END_AUDIO_CODEC_CAPABILITIES & 0x06U) != 0U);
+             (DUAL_END_AUDIO_CODEC_CAPABILITIES & 0x01U) == 0x01U);
     ESP_LOGI(TAG,
              "48k analysis: fixed_calibration=disabled GCC-PHAT=1024"
              " sampled 5Hz available=%u; audio-packet analysis unavailable",
