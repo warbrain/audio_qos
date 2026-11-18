@@ -33,3 +33,11 @@
 *.aac
 *.pcm
 *.raw
+# ESP-IDF component manager downloads (regenerated on build)
+firmware/*/managed_components/
+# Python caches
+__pycache__/
+*.pyc
+# Local test artifacts
+_build/
+_asr_sim/**/capture*/
