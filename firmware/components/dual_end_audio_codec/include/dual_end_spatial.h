@@ -6,15 +6,13 @@
 
 /* Portable 16 kHz/20 ms owner-only processing; no allocation, RTOS or DMA.
  * PCB spacing is fixed at 20 mm. Amplitude/phase responses are not calibrated.
- * Mode 0 is bit-exact stereo bypass; fused modes explicitly emit dual mono.
- * Mode 3 preserves aligned left and NLMS-matched right separately, without DAS.
- * Mode 4 adds a fixed-memory spectral Wiener post-filter to fused DAS.
+ * Mode 0 is a bit-exact stereo bypass.
  * Mode 5 applies independent fixed-memory Wiener filters to L and R.
- * Mode 6 is a dual-channel soft-mask MVDR beamformer with mono output. */
-/* Release: bypass (0) + stereo Wiener (5) only.
- * Measured on 2x196 independent clips: stereo Wiener improved CER by 2.8 / 7.1 pp,
- * while DAS/NLMS were significantly worse and the others gave no gain.
- * Historical mask was 63U (modes 0-5). */
+ * Modes 1-4 and 6 were removed in 0.5.27: DAS/NLMS measured significantly
+ * worse and DAS+Wiener/MVDR gave no gain. Their enum values stay reserved so
+ * the numeric protocol contract does not shift.
+ * Capability mask 16U exposes bypass plus stereo Wiener; the historical mask
+ * was 63U (modes 0-5). */
 #define DUAL_END_SPATIAL_CAPABILITIES 16U /* bit4: stereo Wiener only */
 #define DUAL_END_SPATIAL_FRAME_SAMPLES 320U
 #define DUAL_END_SPATIAL_TAPS 64U

@@ -294,68 +294,6 @@ static uint32_t s_spatial_work_frames, s_spatial_work_max_us;
  * completed timing event before publishing this identity.  Logger never locks
  * or inspects the encoder. */
 static dual_end_spatial_telemetry_t s_spatial_telemetry;
-typedef struct {
-    uint64_t updated_frames;
-    uint64_t frozen_frames;
-    uint32_t bounded_updates;
-    uint32_t resets;
-    uint32_t update_streak;
-    bool converged;
-} mic_nlms_observer_t;
-static mic_nlms_observer_t s_nlms_observer;
-
-static void mic_nlms_observer_reset(void)
-{
-    memset(&s_nlms_observer, 0, sizeof(s_nlms_observer));
-}
-
-/* The spatial matcher deliberately remains untouched. These counters are
- * derived from its completed-frame public statistics in the same owner task.
- * Convergence has 20 ms resolution: first_converged_frame is the completed
- * PCM block boundary where mix first reaches one. */
-static mic_nlms_block_t mic_nlms_observe(const dual_end_spatial_stats_t *stats)
-{
-    mic_nlms_block_t block = {0};
-    if (!stats || (stats->mode != DUAL_END_SPATIAL_NLMS &&
-                   stats->mode != DUAL_END_SPATIAL_NLMS_STEREO)) return block;
-    block.valid = true;
-    block.reason = stats->fallback;
-    const uint64_t updated = stats->updated_frames >= s_nlms_observer.updated_frames ?
-        stats->updated_frames - s_nlms_observer.updated_frames : stats->updated_frames;
-    const uint64_t frozen = stats->frozen_frames >= s_nlms_observer.frozen_frames ?
-        stats->frozen_frames - s_nlms_observer.frozen_frames : stats->frozen_frames;
-    const uint32_t bounded_updates = stats->bounded_updates >= s_nlms_observer.bounded_updates ?
-        stats->bounded_updates - s_nlms_observer.bounded_updates : stats->bounded_updates;
-    const uint32_t resets = stats->resets >= s_nlms_observer.resets ?
-        stats->resets - s_nlms_observer.resets : stats->resets;
-    block.updated_samples = updated > UINT32_MAX ? UINT32_MAX : (uint32_t)updated;
-    block.frozen_samples = frozen > UINT32_MAX ? UINT32_MAX : (uint32_t)frozen;
-    block.bounded_updates = bounded_updates;
-    block.resets = resets;
-    if (block.updated_samples) {
-        s_nlms_observer.update_streak = s_nlms_observer.update_streak == UINT32_MAX ?
-            UINT32_MAX : s_nlms_observer.update_streak + 1U;
-    } else {
-        s_nlms_observer.update_streak = 0;
-    }
-    block.update_streak = s_nlms_observer.update_streak;
-    block.converged = stats->matching_mix >= 1.0f;
-    block.convergence_event = block.converged && !s_nlms_observer.converged;
-    if (block.convergence_event) {
-        /* dual_end_spatial_process increments frames after its 20 ms block;
-         * preserve that positive ending index. The fallback only protects a
-         * malformed diagnostic snapshot and never changes matcher state. */
-        block.convergence_frame = stats->frames ? stats->frames :
-            DUAL_END_SPATIAL_FRAME_SAMPLES;
-        block.has_convergence_frame = true;
-    }
-    s_nlms_observer.updated_frames = stats->updated_frames;
-    s_nlms_observer.frozen_frames = stats->frozen_frames;
-    s_nlms_observer.bounded_updates = stats->bounded_updates;
-    s_nlms_observer.resets = stats->resets;
-    s_nlms_observer.converged = block.converged;
-    return block;
-}
 
 static void mic_spatial_cache_snapshot(void)
 {
@@ -403,7 +341,6 @@ static uint32_t mic_frame_dispatch_epoch_load(void)
  * deliberately does not take the sender/control mutex. */
 static void mic_spatial_reset_state_owner(uint16_t mode) {
     dual_end_spatial_reset(s_spatial,mode,++s_spatial_generation);
-    mic_nlms_observer_reset();
     mic_frame_dispatch_invalidate();
     portENTER_CRITICAL(&s_config_lock);
     s_spatial_status=s_spatial->stats;
@@ -2149,7 +2086,7 @@ static void mic_audio_task(void *arg)
                     s_spatial_work_us+=elapsed;++s_spatial_work_frames;
                     if(elapsed>s_spatial_work_max_us)s_spatial_work_max_us=elapsed;
                     portEXIT_CRITICAL(&s_config_lock);
-                    nlms_block = mic_nlms_observe(&s_spatial->stats);
+                /* NLMS was removed in 0.5.27; the observer would only return zeros. */
                 }
                 mic_vad_process(pcm_buf);
                 stats_output_frames += MIC_OUTPUT_FRAMES_PER_PACKET;
