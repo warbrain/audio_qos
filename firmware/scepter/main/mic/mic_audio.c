@@ -267,7 +267,17 @@ static TaskHandle_t s_config_task_handle;
  * commit for this owner to apply at the next 20 ms boundary. */
 static dual_end_spatial_t *s_spatial;
 static dual_end_spatial_stats_t s_spatial_status;
-static uint16_t s_spatial_requested_mode;
+/* Release default spatial mode. Measured on this firmware:
+ *   - 196 clips at 10 cm (SNR about -4 dB): stereo Wiener -2.85 pp CER
+ *     (bootstrap CI [-5.45, -0.31]) and -1.5 pp perfect-sentence loss avoided.
+ *   - 196 clips at 2 cm (SNR about +13.6 dB): -0.56 pp CER (paired sign test
+ *     p=0.036) and +6.6 pp whole-sentence accuracy (McNemar p=0.029).
+ * Both ends of the operating range favour stereo Wiener, so it is the default.
+ * Define MIC_SPATIAL_DEFAULT_MODE=DUAL_END_SPATIAL_BYPASS to restore bypass. */
+#ifndef MIC_SPATIAL_DEFAULT_MODE
+#define MIC_SPATIAL_DEFAULT_MODE DUAL_END_SPATIAL_WIENER_STEREO
+#endif
+static uint16_t s_spatial_requested_mode = MIC_SPATIAL_DEFAULT_MODE;
 static uint32_t s_spatial_request_generation, s_spatial_applied_request;
 static uint16_t s_spatial_generation;
 static esp_err_t s_spatial_apply_result = ESP_OK;
@@ -276,7 +286,7 @@ static esp_err_t s_spatial_apply_result = ESP_OK;
  * affected 20 ms frame rather than waiting for this lower-priority worker. */
 static bool s_spatial_transition_active, s_spatial_dispatch_paused, s_spatial_commit_pending;
 static uint32_t s_spatial_transition_generation, s_spatial_commit_generation;
-static uint16_t s_spatial_commit_mode;
+static uint16_t s_spatial_commit_mode = MIC_SPATIAL_DEFAULT_MODE;
 static uint64_t s_spatial_work_us;
 static uint32_t s_spatial_work_frames, s_spatial_work_max_us;
 /* One complete audio-owner snapshot per PCM block.  Sender admission now runs
@@ -2321,9 +2331,20 @@ esp_err_t mic_audio_init(void)
     }
     ESP_RETURN_ON_FALSE(s_spatial != NULL, ESP_ERR_NO_MEM, TAG, "allocate spatial state");
     memset(s_spatial, 0, spatial_bytes);
-    ESP_LOGI(TAG, "spatial state: %s %u B, internal_free=%u",
+    /* Apply the release default mode to the DSP state now. Without this the
+     * state stays at mode 0 until a HID request arrives, because the commit
+     * path only runs for a pending request. Bypass and stereo Wiener share the
+     * stereo wire layout, so no sender reconfiguration is needed here. */
+    mic_spatial_reset_state_owner(MIC_SPATIAL_DEFAULT_MODE);
+    portENTER_CRITICAL(&s_config_lock);
+    s_spatial_status = s_spatial->stats;
+    portEXIT_CRITICAL(&s_config_lock);
+    ESP_LOGI(TAG, "spatial state: %s %u B, internal_free=%u, default_mode=%u(%s)",
              spatial_pool, (unsigned)spatial_bytes,
-             (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
+             (unsigned)heap_caps_get_free_size(MALLOC_CAP_INTERNAL),
+             (unsigned)MIC_SPATIAL_DEFAULT_MODE,
+             s_spatial->stats.mode == DUAL_END_SPATIAL_WIENER_STEREO ? "stereo_wiener"
+                                                                    : "bypass");
     s_mic_state_events = xEventGroupCreate();
     ESP_RETURN_ON_FALSE(s_mic_state_events, ESP_ERR_NO_MEM, TAG, "create state events failed");
 
