@@ -82,6 +82,15 @@ esp_err_t dual_end_audio_sender_send_pcm_with_hardware_and_analysis(
     size_t samples,
     const dual_end_hid_input_payload_t *hardware_payload,
     const dual_end_audio_analysis_metadata_t *analysis_metadata);
+/* Timestamped PCM admission for the microphone dispatcher. created_us is the
+ * local completed-raw-block time and remains unchanged through encoder/cache/
+ * radio submission. Compatibility entry points above timestamp their calls. */
+esp_err_t dual_end_audio_sender_send_pcm_with_hardware_and_analysis_at(
+    const int16_t *pcm,
+    size_t samples,
+    const dual_end_hid_input_payload_t *hardware_payload,
+    const dual_end_audio_analysis_metadata_t *analysis_metadata,
+    int64_t created_us);
 esp_err_t dual_end_audio_receiver_set_input_event_sink(dual_end_input_event_sink_t sink, void *ctx);
 esp_err_t dual_end_audio_receiver_start(dual_end_audio_pcm_sink_t sink, void *ctx);
 esp_err_t dual_end_audio_preencode_test_loop(void);

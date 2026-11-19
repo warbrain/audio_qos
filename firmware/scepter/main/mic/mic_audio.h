@@ -27,8 +27,6 @@ typedef struct {
      * output_gain_x reports the left gain; the right gain can differ. */
     uint8_t output_gain_x;
     uint8_t right_output_gain_x;
-    bool vad_enabled;
-    bool vad_open;
     uint32_t packets_per_sec;
     uint32_t sample_values_per_sec;
     uint32_t analysis_frames;
@@ -41,10 +39,13 @@ typedef struct {
     uint32_t spatial_processing_average_us, spatial_processing_max_us;
 } mic_audio_stats_t;
 
+/* captured_us is the local time when the complete 20 ms raw block returned
+ * from DMA. The dispatcher preserves it through queueing and codec admission. */
 typedef void (*mic_audio_frame_cb_t)(
     const int16_t *samples,
     size_t sample_count,
     const dual_end_audio_analysis_metadata_t *analysis,
+    int64_t captured_us,
     void *user_ctx);
 typedef void (*mic_audio_stats_cb_t)(const mic_audio_stats_t *stats, void *user_ctx);
 /* Stats callback executes on optional low-priority Core0 telemetry, not the
@@ -61,7 +62,9 @@ esp_err_t mic_audio_start(void);
 esp_err_t mic_audio_set_enabled(bool enabled);
 void mic_audio_set_motor_active(bool active);
 
-/* Items 0..14 are DSP v1. Codec 15: 3=Opus/4=G722, session-only, applied
+/* Items 0..14 are DSP v1. Retired VAD items 1/11/12/13 read 0/48/300/1.
+ * Writes changing the retired settings are unsupported; item 13 is read-only.
+ * Codec 15: 3=Opus/4=G722, session-only, applied
  * by the bounded control worker; the 20 ms audio owner only commits local DSP
  * state at a frame boundary. Capabilities 16: bit0 G722/bit1 Opus, read-only v2.
  * DSP v3:17 capabilities;18 requested mode RW;19 applied mode;20 layout;

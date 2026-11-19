@@ -1,4 +1,5 @@
 #include "app/settings.hpp"
+#include "audio/input_agc.hpp"
 #include "base/config.hpp"
 #include "base/project_paths.hpp"
 
@@ -133,6 +134,13 @@ bool read_settings(const base::Config &config, const std::filesystem::path &base
         read(config, "voice.vad_enabled", parsed.voice.vad_enabled);
         read(config, "voice.denoise_enabled", parsed.voice.denoise_enabled);
         read(config, "voice.hgtcrn_enabled", parsed.voice.hgtcrn_enabled);
+        read(config, "voice.capture_agc", parsed.voice.capture_agc);
+        {
+            audio::AgcLevel level = audio::AgcLevel::Standard;
+            if (!audio::parse_agc_level(parsed.voice.capture_agc, level))
+                throw std::runtime_error("voice.capture_agc must be off, standard, or strong");
+            parsed.voice.capture_agc = std::string(audio::agc_level_name(level));
+        }
         read(config, "voice.vad_threshold", parsed.voice.vad_threshold);
         if (!std::isfinite(parsed.voice.vad_threshold) || parsed.voice.vad_threshold <= 0.0f || parsed.voice.vad_threshold >= 1.0f)
             throw std::runtime_error("voice.vad_threshold must be greater than zero and less than one");
@@ -206,6 +214,7 @@ bool write_default_settings(const std::filesystem::path &file, const Settings &s
         !set("voice.tts_prewarm", settings.voice.tts_prewarm) ||
         !set("voice.vad_enabled", settings.voice.vad_enabled) || !set("voice.denoise_enabled", settings.voice.denoise_enabled) ||
         !set("voice.hgtcrn_enabled", settings.voice.hgtcrn_enabled) ||
+        !set("voice.capture_agc", settings.voice.capture_agc) ||
         !set("voice.vad_threshold", settings.voice.vad_threshold) ||
         !set("voice.preview_interval_seconds", settings.voice.preview_interval_seconds) ||
         !set("voice.refine", settings.voice.refine) || !set("voice.maximum_audio_seconds", settings.voice.maximum_audio_seconds) ||

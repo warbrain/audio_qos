@@ -1,5 +1,8 @@
 #include "wheel_module.h"
 
+/* Upper bound on the step count accepted from one PCNT sync. */
+#define WHEEL_PCNT_MAX_STEP 8
+
 #include <inttypes.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -103,10 +106,25 @@ static esp_err_t wheel_pcnt_init(void)
     pcnt_unit_config_t unit_config = {
         .low_limit = -32768,
         .high_limit = 32767,
+        /* Hardware compensation: without this the 16-bit counter wraps at the
+         * limits, and a long continuous scroll makes the next delta look like a
+         * huge jump in the opposite direction (thousands of reversed detents
+         * plus a burst of callbacks on the UI task). */
+        .flags = { .accum_count = true },
     };
     ESP_RETURN_ON_ERROR(pcnt_new_unit(&unit_config, &s_wheel_pcnt_unit),
                         TAG,
                         "create PCNT unit failed");
+
+    /* The driver's accumulator only receives the limit events we enable. */
+    ESP_RETURN_ON_ERROR(pcnt_unit_add_watch_point(s_wheel_pcnt_unit,
+                                                    unit_config.low_limit),
+                        TAG,
+                        "add PCNT low-limit watch point failed");
+    ESP_RETURN_ON_ERROR(pcnt_unit_add_watch_point(s_wheel_pcnt_unit,
+                                                    unit_config.high_limit),
+                        TAG,
+                        "add PCNT high-limit watch point failed");
 
     pcnt_glitch_filter_config_t filter_config = {
         .max_glitch_ns = 1000,
@@ -183,6 +201,13 @@ static void wheel_pcnt_sync(bool discard)
     }
 
     int delta = count - s_wheel_pcnt_last_count;
+    /* Defensive clamp: one sync can never legitimately move this far, so cap
+     * it instead of letting a corrupt delta drive thousands of callbacks. */
+    if (delta > WHEEL_PCNT_MAX_STEP) {
+        delta = WHEEL_PCNT_MAX_STEP;
+    } else if (delta < -WHEEL_PCNT_MAX_STEP) {
+        delta = -WHEEL_PCNT_MAX_STEP;
+    }
     s_wheel_pcnt_last_count = count;
     if (!discard && delta != 0) {
         /* The PCNT quadrature configuration counts in the opposite sign to

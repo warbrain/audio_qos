@@ -184,6 +184,9 @@ static const uint8_t sleep_intro_frame_order[] = {7, 0, 1, 2, 3, 4, 5, 6};
  * screen first; because it lasts longer than two seconds, the latest link
  * state is applied immediately after that one-shot finishes. */
 #define LINK_DETECTION_WAIT_MS 2000
+/* Upper bound for the boot black-in animation; keeps boot from hanging
+ * if the animation task or its completion flag never arrives. */
+#define BOOT_ANIMATION_TIMEOUT_MS  3000
 static volatile bool link_wait_active;
 static TickType_t link_wait_deadline;
 
@@ -1063,14 +1066,10 @@ static void scroll_control_task(void *pvParameters)
 
 /* ── OTA updating animation ─────────────────────────────────────────── */
 
-static void updating_draw_buffer(const uint8_t *buf)
+static void updating_draw_buffer_locked(const uint8_t *buf)
 {
-    if (ui_draw_mutex) xSemaphoreTake(ui_draw_mutex, portMAX_DELAY);
-
     lcd_write_frame(0, 0, LCD_WIDTH - 1, LCD_HEIGHT - 1,
                     buf, anim_ctx.uncompressed_frame_size);
-
-    if (ui_draw_mutex) xSemaphoreGive(ui_draw_mutex);
 }
 
 static esp_err_t animation_partition_read(size_t offset, void *dst, size_t size)
@@ -1367,8 +1366,22 @@ static void updating_draw_composite(int bg_frame, int fg_frame, bool black_is_tr
 {
     if (!anim_ctx.valid || updating_bg_buf == NULL || anim_ctx.frame_buf == NULL) return;
 
-    if (!animation_decompress_frame(bg_frame, updating_bg_buf)) return;
-    if (!animation_decompress_frame(fg_frame, anim_ctx.frame_buf)) return;
+    /* The low-battery overlay path shares anim_ctx.frame_buf. Hold the draw
+     * mutex across decompress, composite and send, not only around the SPI
+     * transfer, so the two paths cannot interleave. */
+    ui_state_lock();
+    if (ui_mode != UI_MODE_UPDATING || ui_state == UI_STATE_LOW_POWER) {
+        ui_state_unlock();
+        return;
+    }
+    if (ui_draw_mutex) xSemaphoreTake(ui_draw_mutex, portMAX_DELAY);
+
+    if (!animation_decompress_frame(bg_frame, updating_bg_buf) ||
+        !animation_decompress_frame(fg_frame, anim_ctx.frame_buf)) {
+        if (ui_draw_mutex) xSemaphoreGive(ui_draw_mutex);
+        ui_state_unlock();
+        return;
+    }
 
     /* Composite foreground over background, skipping transparent key pixels.
      * Updating-end frames have an opaque black background instead of alpha, so
@@ -1383,7 +1396,9 @@ static void updating_draw_composite(int bg_frame, int fg_frame, bool black_is_tr
 
     battery_blit_status_to_frame_buf(anim_ctx.frame_buf,
                                      anim_ctx.uncompressed_frame_size);
-    updating_draw_buffer(anim_ctx.frame_buf);
+    updating_draw_buffer_locked(anim_ctx.frame_buf);
+    if (ui_draw_mutex) xSemaphoreGive(ui_draw_mutex);
+    ui_state_unlock();
 }
 
 static bool offline_draw_composite(int bg_frame, int ip_frame, int ip_dx, int ip_dy)
@@ -1448,10 +1463,19 @@ static void updating_task(void *pvParameters)
 
     TickType_t last_wake = xTaskGetTickCount();
 
+    bool updating_active = false;
     for (;;) {
         if (ui_mode != UI_MODE_UPDATING) {
+            updating_active = false;
             vTaskDelay(pdMS_TO_TICKS(100));
             continue;
+        }
+        if (!updating_active) {
+            /* Re-anchor the periodic clock on entry: last_wake is stale after an
+             * idle period and vTaskDelayUntil would replay every missed period
+             * as a burst of full-screen decompositions and SPI writes. */
+            last_wake = xTaskGetTickCount();
+            updating_active = true;
         }
 
         int bg_clip = ANIM_CLIP_UPDATING_BG;
@@ -1902,6 +1926,12 @@ static bool lcd_ui_arm_clip_locked(int clip_id,
     lcd_ui_set_animation_fps(fps);
     ui_state = playback_state;
     lcd_ui_play_animation(true);
+    if (!animation_enabled) {
+        animation_play_once = false;
+        animation_finished = true;
+        ui_state = UI_STATE_IDLE;
+        return false;
+    }
 
     if (frame_order != NULL) {
         ESP_LOGI(TAG, "Play clip %d: %d ordered frames @ %d fps",
@@ -2777,26 +2807,36 @@ void lcd_ui_init(void)
     keypad_status_buf = (uint16_t *)heap_caps_malloc(LCD_WIDTH * KEYPAD_STATUS_H * sizeof(uint16_t), MALLOC_CAP_SPIRAM | MALLOC_CAP_DMA);
 #endif
 
-    /* Create scroll animation event queue */
+    /* Create scroll animation event queue. The consumer task blocks on this
+     * handle with portMAX_DELAY, so a NULL queue would assert inside FreeRTOS;
+     * without the queue the scroll animation is simply disabled. */
     if (scroll_event_queue == NULL) {
         scroll_event_queue = xQueueCreate(4, sizeof(uint8_t));
     }
-
-    /* Start the scroll sequence controller. Frame playback stays exclusively
-     * in animation_task. */
-    if (scroll_task_handle == NULL) {
-        xTaskCreate(scroll_control_task, "scroll_ctrl", 4096, NULL, 2,
-                    &scroll_task_handle);
+    if (scroll_event_queue == NULL) {
+        ESP_LOGE(TAG, "scroll event queue allocation failed; scroll animation disabled");
+    } else if (scroll_task_handle == NULL) {
+        /* Start the scroll sequence controller. Frame playback stays
+         * exclusively in animation_task. */
+        if (xTaskCreate(scroll_control_task, "scroll_ctrl", 4096, NULL, 2,
+                        &scroll_task_handle) != pdPASS) {
+            scroll_task_handle = NULL;
+            ESP_LOGE(TAG, "scroll control task creation failed");
+        }
     }
 
-    /* Create cursor (touchpad) animation event queue */
+    /* Create cursor (touchpad) animation event queue; same NULL-handle hazard. */
     if (cursor_event_queue == NULL) {
         cursor_event_queue = xQueueCreate(4, sizeof(uint8_t));
     }
-
-    /* Start cursor animation task */
-    if (cursor_task_handle == NULL) {
-        xTaskCreate(cursor_animation_task, "cursor_anim", 4096, NULL, 2, &cursor_task_handle);
+    if (cursor_event_queue == NULL) {
+        ESP_LOGE(TAG, "cursor event queue allocation failed; cursor animation disabled");
+    } else if (cursor_task_handle == NULL) {
+        if (xTaskCreate(cursor_animation_task, "cursor_anim", 4096, NULL, 2,
+                        &cursor_task_handle) != pdPASS) {
+            cursor_task_handle = NULL;
+            ESP_LOGE(TAG, "cursor animation task creation failed");
+        }
     }
 
     /* Start OTA updating animation task */
@@ -2845,7 +2885,16 @@ void lcd_ui_init(void)
          * pre-sleep-screen interruption. */
         link_wait_begin(xTaskGetTickCount());
         lcd_ui_play_clip(BOOT_WAKE_CLIP, BOOT_WAKE_FPS, true);
+        /* Bound the wait: if the animation task could not be created or the
+         * stop bit is never published, boot must not hang here forever. */
+        const TickType_t boot_wait_start = xTaskGetTickCount();
+        const TickType_t boot_wait_limit = pdMS_TO_TICKS(BOOT_ANIMATION_TIMEOUT_MS);
         while (!animation_finished) {
+            if ((xTaskGetTickCount() - boot_wait_start) > boot_wait_limit) {
+                ESP_LOGW(TAG, "Boot animation wait timed out after %d ms",
+                         (int)BOOT_ANIMATION_TIMEOUT_MS);
+                break;
+            }
             vTaskDelay(pdMS_TO_TICKS(20));
         }
         ESP_LOGI(TAG, "Boot black-in animation finished, show Normal");

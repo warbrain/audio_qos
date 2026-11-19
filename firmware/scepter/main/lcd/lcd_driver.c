@@ -1,7 +1,7 @@
 /*
  * LCD Driver for ST7789 (vendor-confirmed controller)
  * Resolution: 172(H) x 320(V), RGB565, 4-wire SPI
- * Target: ESP32-S3 with ESP-IDF v6.0.2
+ * Target: ESP32-S3 with ESP-IDF v6.0.3
  *
  * The ST7789 has an internal 240x320 GRAM. The visible 172x320 window is
  * centered with an X offset of 34 pixels (LCD_X_GAP).

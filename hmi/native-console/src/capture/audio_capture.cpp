@@ -4,6 +4,7 @@
 #include <array>
 #include <atomic>
 #include <cmath>
+#include <cstdint>
 #include <cstdio>
 #include <future>
 #include <mutex>
@@ -129,6 +130,14 @@ struct AudioCapture::Impl
     std::atomic<float> rms{0.0f};
     std::atomic<int> fusion{0};
     std::atomic<int> stream_channels{1};
+    std::atomic<int> agc{static_cast<int>(audio::AgcLevel::Standard)};
+    std::atomic<float> manual_gain{1.0f};
+    std::atomic<std::uint64_t> agc_frames{0};
+    std::atomic<std::uint64_t> agc_limited{0};
+    std::atomic<float> agc_last_gain{1.0f};
+    std::atomic<float> agc_min_gain{1.0f};
+    std::atomic<float> agc_max_gain{1.0f};
+    audio::InputAgc agc_state; // capture thread only
     mutable std::mutex format_mutex;
     Format native;
     mutable std::mutex statistics_mutex;
@@ -302,6 +311,23 @@ struct AudioCapture::Impl
                                     energy_left = 0.0;
                                     energy_right = 0.0;
                                 }
+                                // Host AGC runs on the fused mono block only; the
+                                // interleaved copy stays untouched for H-GTCRN.
+                                const audio::AgcLevel level = static_cast<audio::AgcLevel>(agc.load());
+                                if (const auto config = audio::input_agc_config(level))
+                                {
+                                    (void)agc_state.process(block.data(), block.size(), *config);
+                                    const auto stats = agc_state.statistics();
+                                    agc_frames.store(stats.frames);
+                                    agc_limited.store(stats.limited_samples);
+                                    agc_last_gain.store(stats.last_gain);
+                                    agc_min_gain.store(stats.min_gain);
+                                    agc_max_gain.store(stats.max_gain);
+                                }
+                                else
+                                {
+                                    audio::InputAgc::apply_gain(block.data(), block.size(), manual_gain.load());
+                                }
                                 // The caller queues this block; no inference belongs here.
                                 sink(AudioBlock{block.data(), channel_block.data(), block.size(), channels, frame_cursor});
                                 frame_cursor += static_cast<std::int64_t>(block.size());
@@ -354,7 +380,7 @@ AudioCapture::~AudioCapture() { stop(); }
 
 bool AudioCapture::start(Sink sink, std::string *error)
 {
-    return start(std::move(sink), error, Fusion::Mean);
+    return start(std::move(sink), error, Fusion::Left);
 }
 
 bool AudioCapture::start(Sink sink, std::string *error, Fusion fusion_mode)
@@ -374,6 +400,12 @@ bool AudioCapture::start_blocks(BlockSink sink, std::string *error, Fusion fusio
 {
     stop();
     impl_->fusion.store(static_cast<int>(fusion_mode));
+    impl_->agc_state.reset();
+    impl_->agc_frames.store(0);
+    impl_->agc_limited.store(0);
+    impl_->agc_last_gain.store(1.0f);
+    impl_->agc_min_gain.store(1.0f);
+    impl_->agc_max_gain.store(1.0f);
     { std::lock_guard lock(impl_->statistics_mutex); impl_->diagnostic = {}; }
     if (error) error->clear();
     if (!sink)
@@ -431,6 +463,28 @@ Fusion AudioCapture::fusion() const noexcept
 }
 
 int AudioCapture::stream_channels() const noexcept { return impl_->stream_channels.load(); }
+
+void AudioCapture::set_agc(audio::AgcLevel level, float manual_gain) noexcept
+{
+    impl_->agc.store(static_cast<int>(level));
+    impl_->manual_gain.store(std::isfinite(manual_gain) && manual_gain > 0.0f ? manual_gain : 1.0f);
+}
+
+audio::AgcLevel AudioCapture::agc() const noexcept
+{
+    return static_cast<audio::AgcLevel>(impl_->agc.load());
+}
+
+audio::InputAgcStatistics AudioCapture::agc_statistics() const
+{
+    audio::InputAgcStatistics stats;
+    stats.frames = impl_->agc_frames.load();
+    stats.limited_samples = impl_->agc_limited.load();
+    stats.last_gain = impl_->agc_last_gain.load();
+    stats.min_gain = impl_->agc_min_gain.load();
+    stats.max_gain = impl_->agc_max_gain.load();
+    return stats;
+}
 
 Format AudioCapture::device_format() const noexcept
 {

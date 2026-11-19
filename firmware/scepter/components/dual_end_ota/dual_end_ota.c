@@ -29,6 +29,17 @@ static const char *TAG = "dual_end_ota";
 static esp_ota_handle_t s_ota_handle = 0;
 static const esp_partition_t *s_update_partition;
 static dual_end_ota_status_t s_status = {0};
+/* Session ownership spans both USB and wireless worker tasks. Only short state
+ * transitions hold this lock; flash operations and activity callbacks run outside. */
+typedef enum {
+    OTA_WRITER_NONE = 0,
+    OTA_WRITER_LOCAL,
+    OTA_WRITER_WIRELESS,
+    OTA_WRITER_MAINTENANCE,
+} ota_writer_source_t;
+static portMUX_TYPE s_writer_lock = portMUX_INITIALIZER_UNLOCKED;
+static ota_writer_source_t s_writer_source;
+static bool s_writer_busy;
 static uint32_t s_running_crc;
 static uint32_t s_scepter_expected_sequence;
 static scepter_role_t s_service_role;
@@ -83,6 +94,55 @@ static void notify_ota_activity(bool active)
     if (s_activity_cb) {
         s_activity_cb(active, s_activity_ctx);
     }
+}
+
+static bool ota_writer_enter(ota_writer_source_t source, bool begin)
+{
+    bool accepted;
+    portENTER_CRITICAL(&s_writer_lock);
+    accepted = !s_writer_busy && (begin ?
+        s_writer_source == OTA_WRITER_NONE && !s_relay_active :
+        s_writer_source == source);
+    if (accepted) {
+        s_writer_source = source;
+        s_writer_busy = true;
+    }
+    portEXIT_CRITICAL(&s_writer_lock);
+    return accepted;
+}
+
+static void ota_writer_leave(bool release_session)
+{
+    portENTER_CRITICAL(&s_writer_lock);
+    s_writer_busy = false;
+    if (release_session) s_writer_source = OTA_WRITER_NONE;
+    portEXIT_CRITICAL(&s_writer_lock);
+}
+
+static bool ota_writer_is_source(ota_writer_source_t source)
+{
+    portENTER_CRITICAL(&s_writer_lock);
+    const bool matches = s_writer_source == source;
+    portEXIT_CRITICAL(&s_writer_lock);
+    return matches;
+}
+
+/* Called only by the source that reserved the current operation. Keep its
+ * reservation until the old activity callback has finished before admitting
+ * another BEGIN, otherwise an old false callback can unpause a new transfer. */
+static void ota_writer_abort_owned(void)
+{
+    if (s_ota_handle) esp_ota_abort(s_ota_handle);
+    const bool was_active = s_status.active;
+    s_wireless_session = false;
+    s_have_last_data = false;
+    s_ota_handle = 0;
+    s_update_partition = NULL;
+    portENTER_CRITICAL(&s_writer_lock);
+    s_status.active = false;
+    portEXIT_CRITICAL(&s_writer_lock);
+    if (was_active) notify_ota_activity(false);
+    ota_writer_leave(true);
 }
 
 static bool is_ota_partition_label(const char *label)
@@ -296,9 +356,14 @@ void dual_end_ota_get_mac_string(char *buf, size_t len)
              mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
 }
 
+
 dual_end_ota_status_t dual_end_ota_get_status(void)
 {
-    return s_status;
+    portENTER_CRITICAL(&s_writer_lock);
+    dual_end_ota_status_t snapshot = s_status;
+    if (s_writer_source != OTA_WRITER_NONE) snapshot.active = true;
+    portEXIT_CRITICAL(&s_writer_lock);
+    return snapshot;
 }
 
 esp_err_t dual_end_ota_register_activity_cb(dual_end_ota_activity_cb_t cb, void *ctx)
@@ -417,85 +482,116 @@ esp_err_t dual_end_ota_self_begin(dual_end_ota_target_t target,
     return dual_end_ota_self_begin_partition(target, session_id, image_size, image_crc32, "auto");
 }
 
+
+static esp_err_t ota_writer_begin(ota_writer_source_t source,
+                                  dual_end_ota_target_t target,
+                                  uint32_t session_id,
+                                  uint32_t image_size,
+                                  uint32_t image_crc32,
+                                  const char *partition_label)
+{
+    if (target != current_target_from_project() || !session_id || !image_size)
+        return ESP_ERR_INVALID_ARG;
+    if (!ota_writer_enter(source, true)) return ESP_ERR_INVALID_STATE;
+    const esp_partition_t *partition = NULL;
+    esp_err_t ret = select_safe_update_partition(partition_label, &partition);
+    if (ret == ESP_OK && image_size > partition->size) ret = ESP_ERR_INVALID_SIZE;
+    if (ret != ESP_OK) {
+        ota_writer_leave(true);
+        return ret;
+    }
+    s_update_partition = partition;
+    s_wireless_session = source == OTA_WRITER_WIRELESS;
+    s_running_crc = 0;
+    portENTER_CRITICAL(&s_writer_lock);
+    s_status = (dual_end_ota_status_t) {
+        .target = target, .session_id = session_id, .image_size = image_size,
+        .image_crc32 = image_crc32, .active = true,
+    };
+    portEXIT_CRITICAL(&s_writer_lock);
+    /* Reserve and pause before the first flash operation on either route. */
+    notify_ota_activity(true);
+    ret = esp_ota_begin(partition, OTA_WITH_SEQUENTIAL_WRITES, &s_ota_handle);
+    if (ret != ESP_OK) {
+        ota_writer_abort_owned();
+        return ret;
+    }
+    ESP_LOGI(TAG, "OTA begin target=%u session=%" PRIu32 " size=%" PRIu32 " crc=0x%08" PRIx32 " partition=%s",
+             target, session_id, image_size, image_crc32, partition->label);
+    ota_writer_leave(false);
+    return ESP_OK;
+}
+
 esp_err_t dual_end_ota_self_begin_partition(dual_end_ota_target_t target,
                                             uint32_t session_id,
                                             uint32_t image_size,
                                             uint32_t image_crc32,
                                             const char *partition_label)
 {
-    if (s_status.active || s_relay_active) return ESP_ERR_INVALID_STATE;
-    if (target != current_target_from_project() || !session_id || !image_size) return ESP_ERR_INVALID_ARG;
-    ESP_RETURN_ON_ERROR(select_safe_update_partition(partition_label, &s_update_partition),
-                        TAG, "select safe OTA partition");
-    if (image_size > s_update_partition->size) {
-        s_update_partition = NULL;
-        return ESP_ERR_INVALID_SIZE;
-    }
-    /* Sequential erase bounds BEGIN latency and USB/radio queue pressure. */
-    esp_err_t ret = esp_ota_begin(s_update_partition, OTA_WITH_SEQUENTIAL_WRITES, &s_ota_handle);
-    if (ret != ESP_OK) {
-        s_update_partition = NULL;
-        s_ota_handle = 0;
+    return ota_writer_begin(OTA_WRITER_LOCAL, target, session_id,
+                             image_size, image_crc32, partition_label);
+}
+
+
+static esp_err_t ota_writer_write(ota_writer_source_t source, const uint8_t *data, size_t len)
+{
+    if (!data || len == 0 || !ota_writer_enter(source, false)) return ESP_ERR_INVALID_STATE;
+    if (!s_status.active || (uint64_t)s_status.bytes_written + len > s_status.image_size) {
+        const esp_err_t ret = s_status.active ? ESP_ERR_INVALID_SIZE : ESP_ERR_INVALID_STATE;
+        ota_writer_leave(false);
         return ret;
     }
-
-    s_status = (dual_end_ota_status_t) {
-        .target = target,
-        .session_id = session_id,
-        .image_size = image_size,
-        .image_crc32 = image_crc32,
-        .bytes_written = 0,
-        .packets = 0,
-        .active = true,
-    };
-    s_running_crc = 0;
-    notify_ota_activity(true);
-    ESP_LOGI(TAG, "OTA begin target=%u session=%" PRIu32 " size=%" PRIu32 " crc=0x%08" PRIx32 " partition=%s",
-             target, session_id, image_size, image_crc32, s_update_partition->label);
-    return ESP_OK;
+    const esp_err_t ret = esp_ota_write(s_ota_handle, data, len);
+    if (ret == ESP_OK) {
+        s_running_crc = dual_end_ota_crc32_update(s_running_crc, data, len);
+        portENTER_CRITICAL(&s_writer_lock);
+        s_status.bytes_written += len;
+        s_status.packets++;
+        portEXIT_CRITICAL(&s_writer_lock);
+    }
+    ota_writer_leave(false);
+    return ret;
 }
 
 esp_err_t dual_end_ota_self_write(const uint8_t *data, size_t len)
 {
-    if (!s_status.active || !data || len == 0) {
-        return ESP_ERR_INVALID_STATE;
-    }
-    if ((uint64_t)s_status.bytes_written + len > s_status.image_size) {
-        return ESP_ERR_INVALID_SIZE;
-    }
-
-    ESP_RETURN_ON_ERROR(esp_ota_write(s_ota_handle, data, len), TAG, "ota write");
-    s_running_crc = dual_end_ota_crc32_update(s_running_crc, data, len);
-    s_status.bytes_written += len;
-    s_status.packets++;
-    return ESP_OK;
+    return ota_writer_write(OTA_WRITER_LOCAL, data, len);
 }
 
-esp_err_t dual_end_ota_self_finish(bool reboot_after_finish)
+
+static esp_err_t ota_writer_finish(ota_writer_source_t source, bool reboot_after_finish)
 {
-    if (!s_status.active) return ESP_ERR_INVALID_STATE;
+    if (!ota_writer_enter(source, false)) return ESP_ERR_INVALID_STATE;
+    if (!s_status.active) {
+        ota_writer_leave(true);
+        return ESP_ERR_INVALID_STATE;
+    }
     esp_err_t ret = ESP_OK;
     if (s_status.bytes_written != s_status.image_size) ret = ESP_ERR_INVALID_SIZE;
     else if (s_running_crc != s_status.image_crc32) ret = ESP_ERR_INVALID_CRC;
     if (ret != ESP_OK) {
-        dual_end_ota_self_abort();
+        ota_writer_abort_owned();
         return ret;
     }
     ret = esp_ota_end(s_ota_handle);
-    /* esp_ota_end consumes the handle even on validation failure. */
     s_ota_handle = 0;
     if (ret == ESP_OK) ret = validate_written_image(s_update_partition, s_status.target);
     if (ret == ESP_OK) ret = persist_wireless_install_result();
     if (ret == ESP_OK) ret = esp_ota_set_boot_partition(s_update_partition);
     if (ret != ESP_OK) {
         if (s_wireless_session) (void)pending_result_write(NULL);
-        dual_end_ota_self_abort();
+        ota_writer_abort_owned();
         return ret;
     }
     ESP_LOGI(TAG, "OTA committed partition=%s bytes=%" PRIu32, s_update_partition->label, s_status.bytes_written);
     s_update_partition = NULL;
+    portENTER_CRITICAL(&s_writer_lock);
     s_status.active = false;
+    portEXIT_CRITICAL(&s_writer_lock);
     if (!s_wireless_session) notify_ota_activity(false);
+    /* Wireless END keeps its source reserved and audio paused until reboot;
+     * the task still owns the ACK and post-commit restart sequence. */
+    ota_writer_leave(!s_wireless_session);
     if (reboot_after_finish) {
         vTaskDelay(pdMS_TO_TICKS(300));
         esp_restart();
@@ -503,61 +599,58 @@ esp_err_t dual_end_ota_self_finish(bool reboot_after_finish)
     return ESP_OK;
 }
 
+esp_err_t dual_end_ota_self_finish(bool reboot_after_finish)
+{
+    return ota_writer_finish(OTA_WRITER_LOCAL, reboot_after_finish);
+}
+
+
 esp_err_t dual_end_ota_erase_partition(const char *partition_label)
 {
-    if (s_status.active || s_relay_active) return ESP_ERR_INVALID_STATE;
+    if (!ota_writer_enter(OTA_WRITER_MAINTENANCE, true)) return ESP_ERR_INVALID_STATE;
     const esp_partition_t *partition = find_app_partition(partition_label);
-    ESP_RETURN_ON_FALSE(partition, ESP_ERR_NOT_FOUND, TAG, "find partition for erase");
-    ESP_RETURN_ON_FALSE(is_ota_partition_label(partition->label),
-                        ESP_ERR_INVALID_ARG,
-                        TAG,
-                        "erase only allows ota_0/ota_1 partition=%s",
-                        partition->label);
-    ESP_RETURN_ON_FALSE(!dual_end_ota_partition_is_running(partition->label),
-                        ESP_ERR_INVALID_STATE,
-                        TAG,
-                        "refuse to erase running partition=%s",
-                        partition->label);
-    ESP_RETURN_ON_FALSE(!same_partition(partition, esp_ota_get_boot_partition()),
-                        ESP_ERR_INVALID_STATE, TAG, "refuse to erase selected boot partition");
-    ESP_LOGI(TAG, "erase partition=%s offset=0x%08" PRIx32 " size=0x%08" PRIx32,
-             partition->label, partition->address, partition->size);
-    return esp_partition_erase_range(partition, 0, partition->size);
+    esp_err_t ret = ESP_OK;
+    if (!partition) ret = ESP_ERR_NOT_FOUND;
+    else if (!is_ota_partition_label(partition->label)) ret = ESP_ERR_INVALID_ARG;
+    else if (dual_end_ota_partition_is_running(partition->label) ||
+             same_partition(partition, esp_ota_get_boot_partition())) ret = ESP_ERR_INVALID_STATE;
+    if (ret == ESP_OK) {
+        ESP_LOGI(TAG, "erase partition=%s offset=0x%08" PRIx32 " size=0x%08" PRIx32,
+                 partition->label, partition->address, partition->size);
+        ret = esp_partition_erase_range(partition, 0, partition->size);
+    }
+    ota_writer_leave(true);
+    return ret;
 }
+
 
 esp_err_t dual_end_ota_set_boot_partition_label(const char *partition_label)
 {
-    if (s_status.active || s_relay_active) return ESP_ERR_INVALID_STATE;
+    if (!ota_writer_enter(OTA_WRITER_MAINTENANCE, true)) return ESP_ERR_INVALID_STATE;
     const esp_partition_t *partition = find_app_partition(partition_label);
-    ESP_RETURN_ON_FALSE(partition, ESP_ERR_NOT_FOUND, TAG, "find partition for boot switch");
-    ESP_RETURN_ON_FALSE(strcmp(partition->label, "factory") == 0 || is_ota_partition_label(partition->label),
-                        ESP_ERR_INVALID_ARG,
-                        TAG,
-                        "boot switch only allows factory/ota_0/ota_1 partition=%s",
-                        partition->label);
-    if (is_ota_partition_label(partition->label)) {
-        ESP_RETURN_ON_ERROR(validate_written_image(partition, current_target_from_project()),
-                            TAG,
-                            "validate boot partition");
+    esp_err_t ret = ESP_OK;
+    if (!partition) ret = ESP_ERR_NOT_FOUND;
+    else if (strcmp(partition->label, "factory") != 0 && !is_ota_partition_label(partition->label))
+        ret = ESP_ERR_INVALID_ARG;
+    else if (is_ota_partition_label(partition->label))
+        ret = validate_written_image(partition, current_target_from_project());
+    if (ret == ESP_OK) {
+        ESP_LOGI(TAG, "set boot partition=%s", partition->label);
+        ret = esp_ota_set_boot_partition(partition);
     }
-    ESP_LOGI(TAG, "set boot partition=%s", partition->label);
-    return esp_ota_set_boot_partition(partition);
+    ota_writer_leave(true);
+    return ret;
+}
+
+
+static void ota_writer_abort(ota_writer_source_t source)
+{
+    if (ota_writer_enter(source, false)) ota_writer_abort_owned();
 }
 
 void dual_end_ota_self_abort(void)
 {
-    if (s_ota_handle) {
-        esp_ota_abort(s_ota_handle);
-    }
-    bool was_active = s_status.active;
-    s_wireless_session = false;
-    s_have_last_data = false;
-    s_ota_handle = 0;
-    s_update_partition = NULL;
-    s_status.active = false;
-    if (was_active) {
-        notify_ota_activity(false);
-    }
+    ota_writer_abort(OTA_WRITER_LOCAL);
 }
 
 static esp_err_t send_packet(dual_end_ota_packet_t *packet)

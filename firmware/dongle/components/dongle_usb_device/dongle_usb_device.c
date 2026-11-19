@@ -1401,6 +1401,8 @@ static void cdc_worker_task(void *arg)
     cdc_rx_block_t block;
     while (true) {
         ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(100));
+        /* Connection callbacks only advance the epoch and mark this event.
+         * Filter old blocks instead of resetting a queue containing new data. */
         cdc_handle_rx_events(itf);
         if (s_ota_mode != CDC_OTA_IDLE &&
             esp_timer_get_time() - s_ota_last_rx_us > CDC_OTA_RX_TIMEOUT_US) {
@@ -1419,13 +1421,29 @@ static void cdc_line_state_cb(int itf, cdcacm_event_t *event)
     bool dtr = event->line_state_changed_data.dtr != 0;
     portENTER_CRITICAL(&s_cdc_rx_lock);
     bool was_dtr = s_cdc_dtr;
+    /* A repeated low-DTR control request is also an explicit reconnect boundary
+     * after overflow. Clients keeping DTR low can reassert it when reopening.
+     * Do not reinterpret arbitrary binary bytes as a recovery command. */
+    bool low_dtr_recovery = !dtr && !was_dtr && s_cdc_discard_until_disconnect;
+    bool new_connection = (dtr && !was_dtr) || low_dtr_recovery;
     s_cdc_dtr = dtr;
     if (dtr) {
         s_cdc_connected = true;
     }
+    if (new_connection) {
+        ++s_cdc_epoch;
+        s_cdc_disconnect_pending = true;
+        s_cdc_rx_overflow_pending = false;
+        s_cdc_discard_until_disconnect = false;
+    }
     portEXIT_CRITICAL(&s_cdc_rx_lock);
     if (!dtr && was_dtr) {
         cdc_invalidate_connection();
+    } else if (new_connection) {
+        /* This is a USB-task callback. The worker aborts the old OTA and resets
+         * both parsers before consuming the new epoch; it never resets the queue. */
+        tud_cdc_n_read_flush(itf);
+        if (s_cdc_worker) xTaskNotifyGive(s_cdc_worker);
     }
     ESP_LOGI(TAG, "CDC%d line state: dtr=%d rts=%d",
              itf,
@@ -1451,10 +1469,9 @@ static esp_err_t uac_input_cb(uint8_t *buf, size_t len, size_t *bytes_read, void
     (void)ctx;
     static uint32_t last_bridge_generation;
     size_t copied = dongle_uac_bridge_read_pcm(buf, len);
-    dongle_uac_bridge_stats_t bridge = {0};
-    dongle_uac_bridge_get_stats(&bridge);
-    if (bridge.session_generation != last_bridge_generation) {
-        last_bridge_generation = bridge.session_generation;
+    const uint32_t generation = dongle_uac_bridge_session_generation();
+    if (generation != last_bridge_generation) {
+        last_bridge_generation = generation;
         /* Reject a capture straddling a timeout or session reset. The USB
          * callback clears queued history at the next endpoint boundary. */
         uac_device_reset_mic_session();

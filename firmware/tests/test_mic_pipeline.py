@@ -70,7 +70,7 @@ typedef struct {
     dual_end_owner_outcome_t outcome;
 } dual_end_audio_owner_timing_t;
 typedef void (*mic_audio_frame_cb_t)(const int16_t *, size_t,
-    const dual_end_audio_analysis_metadata_t *, void *);
+    const dual_end_audio_analysis_metadata_t *, int64_t, void *);
 PLACEHOLDER_BLOCK_TYPE
 static void *s_capture_blocks,*s_diagnostic_blocks,*s_capture_io_lock;
 static void *s_frame_dispatch_blocks,*s_owner_timing_events,*s_frame_dispatch_control;

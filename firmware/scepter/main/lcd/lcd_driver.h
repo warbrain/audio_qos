@@ -1,7 +1,7 @@
 /*
  * LCD Driver for ST7789
  * Resolution: 172(H) x 320(V), RGB565, SPI interface
- * Target: ESP32-S3 with ESP-IDF v6.0.2
+ * Target: ESP32-S3 with ESP-IDF v6.0.3
  */
 
 #pragma once

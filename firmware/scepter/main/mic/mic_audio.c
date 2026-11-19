@@ -31,6 +31,7 @@
 #include "dual_end_audio.h"
 #include "mic_analysis.h"
 #include "dual_end_spatial.h"
+#include "dual_end_audio_recovery_protocol.h"
 
 static const char *TAG = "mic_audio";
 
@@ -238,14 +239,12 @@ static portMUX_TYPE s_frame_dispatch_epoch_lock = portMUX_INITIALIZER_UNLOCKED;
 /* Audio task owns DSP state. Control task publishes settings under a short lock.
  * New settings are session-only; legacy 0x0A still persists its shared gain. */
 static portMUX_TYPE s_config_lock = portMUX_INITIALIZER_UNLOCKED;
-static uint16_t s_config[13] = {1,0,CONFIG_MIC_OUTPUT_GAIN_X,CONFIG_MIC_OUTPUT_GAIN_X,1,80,1,7000,1,20000,26000,48,300};
-static uint16_t s_requested_config[13] = {1,0,CONFIG_MIC_OUTPUT_GAIN_X,CONFIG_MIC_OUTPUT_GAIN_X,1,80,1,7000,1,20000,26000,48,300};
+/* Index 1 is reserved so the active DSP v1 settings keep their item IDs. */
+static uint16_t s_config[11] = {1,0,CONFIG_MIC_OUTPUT_GAIN_X,CONFIG_MIC_OUTPUT_GAIN_X,1,80,1,7000,1,20000,26000};
+static uint16_t s_requested_config[11] = {1,0,CONFIG_MIC_OUTPUT_GAIN_X,CONFIG_MIC_OUTPUT_GAIN_X,1,80,1,7000,1,20000,26000};
 static uint32_t s_config_generation, s_applied_generation;
 _Alignas(16) static float s_runtime_fir[MIC_DECIMATOR_FIR_STORAGE];
 static float s_runtime_hpf = MIC_HPF_ALPHA;
-static uint32_t s_vad_hold_frames;
-static float s_vad_gain = 1.0f;
-static bool s_vad_open = true;
 static void mic_owner_apply_dsp_config(void);
 /* Only asynchronous transition/lifecycle code takes this control lock.  The
  * 20 ms DSP owner never waits on it; the dispatch and config workers hold it
@@ -592,16 +591,15 @@ static inline int32_t abs_i16_to_i32(int16_t value)
 }
 
 static bool mic_config_valid(const uint16_t *v) {
-    return v[1]<=1 && v[2]>=1 && v[2]<=32 && v[3]>=1 && v[3]<=32 &&
+    return v[2]>=1 && v[2]<=32 && v[3]>=1 && v[3]<=32 &&
         v[4]<=1 && v[5]>=20 && v[5]<=500 && v[6]<=1 && v[7]>=1000 && v[7]<=7000 &&
-        v[8]<=1 && v[9]>=1000 && v[9]<v[10] && v[10]<=32767 &&
-        v[11]>=20 && v[11]<=80 && v[12]<=2000;
+        v[8]<=1 && v[9]>=1000 && v[9]<v[10] && v[10]<=32767;
 }
-/* The 20 ms owner applies only local filter/gain/VAD state.  Codec and spatial
+/* The 20 ms owner applies only local filter/gain state.  Codec and spatial
  * transport transitions are intentionally handled by mic_config_transition_task_fn;
  * see mic_owner_apply_spatial_commit for the owner-side spatial handoff. */
 static void mic_owner_apply_dsp_config(void) {
-    uint16_t next[13]; uint32_t generation;
+    uint16_t next[11]; uint32_t generation;
     portENTER_CRITICAL(&s_config_lock);
     generation=s_config_generation;
     memcpy(next,s_requested_config,sizeof(next));
@@ -618,8 +616,7 @@ static void mic_owner_apply_dsp_config(void) {
         for (int i=0;i<MIC_DECIMATOR_FIR_TAPS;i++) s_runtime_fir[i]/=sum;
     }
     s_runtime_hpf=next[5]==80 ? MIC_HPF_ALPHA : 1.0f/(1.0f+2.0f*3.14159265359f*next[5]/48000.0f);
-    s_vad_hold_frames=0; s_vad_gain=1.0f;
-    /* A gain/filter/VAD generation changes the learned channel response. */
+    /* A gain/filter generation changes the learned channel response. */
     mic_spatial_reset_state_owner(s_spatial->stats.mode);
     portENTER_CRITICAL(&s_config_lock);
     memcpy(s_config,next,sizeof(next));
@@ -636,10 +633,29 @@ esp_err_t mic_audio_parameter(bool write, uint8_t item, uint16_t value, uint16_t
         *actual = DUAL_END_AUDIO_CODEC_CAPABILITIES;
         return ESP_OK;
     }
-    if (write && (item == 0 || item > 12)) return ESP_ERR_INVALID_ARG;
+
+    if (item == 1 || item == 11 || item == 12 || item == 13) {
+        *actual = 0;
+        return (write && value != 0) ? ESP_ERR_NOT_SUPPORTED : ESP_OK;
+    }
+    if (write && (item == 0 || item == 14)) return ESP_ERR_INVALID_ARG;
     uint32_t generation=0;
     if (write) {
-        uint16_t next[13];
+        /* Idempotent write: re-applying an unchanged value would still bump the
+         * generation counter, and the apply path resets the spatial state. That
+         * reset pre-fills 512 zero samples, i.e. 32 ms of silence, so a host
+         * that re-sends the current gain must not cause an audio gap. */
+        portENTER_CRITICAL(&s_config_lock);
+        const uint16_t current_value = s_requested_config[item];
+        portEXIT_CRITICAL(&s_config_lock);
+        if (current_value == value) {
+            portENTER_CRITICAL(&s_config_lock);
+            *actual = s_config[item];
+            portEXIT_CRITICAL(&s_config_lock);
+            return ESP_OK;
+        }
+
+        uint16_t next[11];
         portENTER_CRITICAL(&s_config_lock);
         memcpy(next,s_requested_config,sizeof(next));
         next[item]=value;
@@ -657,41 +673,10 @@ esp_err_t mic_audio_parameter(bool write, uint8_t item, uint16_t value, uint16_t
         if (!applied) return ESP_ERR_TIMEOUT;
     }
     portENTER_CRITICAL(&s_config_lock);
-    *actual=item==13 ? (uint16_t)s_vad_open : item==14 ? (uint16_t)(s_capture_enabled && s_capture_io_running) : s_config[item];
+    *actual=item==14 ? (uint16_t)(s_capture_enabled && s_capture_io_running) : s_config[item];
     portEXIT_CRITICAL(&s_config_lock);
     return ESP_OK;
 }
-static void mic_vad_process(int16_t *pcm) {
-    /* Off is a true pass-through, including the established hold/open state.
-     * Avoid software-double energy and threshold work when it cannot gate. */
-    if (!s_config[1]) {
-        s_vad_hold_frames=(s_config[12]+19)/20;
-        portENTER_CRITICAL(&s_config_lock); s_vad_open=true; portEXIT_CRITICAL(&s_config_lock);
-        s_vad_gain=1.0f;
-        return;
-    }
-    /* PCM16 squares and 320-sample sums are exact integers below 2^39.
-     * Convert only for the original division, preserving its float rounding. */
-    uint64_t energy[2]={0,0};
-    for (int i=0;i<MIC_OUTPUT_SAMPLE_VALUES_PER_PACKET;i++) {
-        const int32_t sample=pcm[i];
-        energy[i%2]+=(uint64_t)(sample*sample);
-    }
-    const uint64_t maximum_energy=energy[0]>energy[1] ? energy[0] : energy[1];
-    float rms=sqrtf((float)((double)maximum_energy/MIC_OUTPUT_FRAMES_PER_PACKET));
-    float threshold=32768.0f*powf(10.0f,-(float)s_config[11]/20.0f);
-    bool open=!s_config[1] || rms>=threshold;
-    if (open) s_vad_hold_frames=(s_config[12]+19)/20;
-    else if (s_vad_hold_frames) { s_vad_hold_frames--; open=true; }
-    portENTER_CRITICAL(&s_config_lock); s_vad_open=open; portEXIT_CRITICAL(&s_config_lock);
-    if (!s_config[1]) { s_vad_gain=1.0f; return; }
-    for (int i=0;i<MIC_OUTPUT_FRAMES_PER_PACKET;i++) {
-        s_vad_gain=fminf(1.0f,fmaxf(0.0f,s_vad_gain+(open ? 0.0125f : -0.0125f)));
-        pcm[i*2]=clamp_i16_from_float(pcm[i*2]*s_vad_gain);
-        pcm[i*2+1]=clamp_i16_from_float(pcm[i*2+1]*s_vad_gain);
-    }
-}
-
 
 /* Bounded IO/compute separation. The capture queue copies synchronized raw
  * blocks; encoded-frame dispatch uses a fixed PCM pool plus a slot-ID SPSC
@@ -1419,7 +1404,9 @@ static void mic_frame_dispatch_task_fn(void *arg)
                 continue;
             }
             const uint64_t control_ready_us=(uint64_t)esp_timer_get_time();
-            if (!s_capture_enabled || frame->dispatch_epoch!=mic_frame_dispatch_epoch_load()) {
+            if (!s_capture_enabled || frame->dispatch_epoch!=mic_frame_dispatch_epoch_load() ||
+                !dual_end_audio_deadline_valid((int64_t)control_ready_us,
+                                              (int64_t)frame->captured_us)) {
                 mic_frame_dispatch_note_invalidated();
                 xSemaphoreGive(s_frame_dispatch_control);
                 mic_frame_dispatch_release(slot);
@@ -1428,7 +1415,8 @@ static void mic_frame_dispatch_task_fn(void *arg)
             const int64_t work_started_us=esp_timer_get_time();
             if (frame->callback) {
                 frame->callback(frame->pcm,MIC_OUTPUT_SAMPLE_VALUES_PER_PACKET,
-                               &frame->analysis,frame->user_ctx);
+                               &frame->analysis,(int64_t)frame->captured_us,
+                               frame->user_ctx);
             }
             const int64_t work_finished_us=esp_timer_get_time();
             dual_end_audio_owner_timing_t timing={0};
@@ -1568,13 +1556,12 @@ static void mic_telemetry_task(void *arg)
         if(s_stats_callback)s_stats_callback(stats,s_stats_user_ctx);
         if(now-last_analysis>=pdMS_TO_TICKS(MIC_ANALYSIS_RUNTIME_LOG_INTERVAL_MS)) {
             ESP_LOGI(TAG,"analysis rate=%" PRIu32 "fps avg/max=%" PRIu32 "/%" PRIu32
-                "us flags=0x%02x tdoa=%d/256 conf/coh=%u/%u hf/motor=%u/%u clip=%u/%u vad=%u gate_open=%u gain=%u/%u",
+                "us flags=0x%02x tdoa=%d/256 conf/coh=%u/%u hf/motor=%u/%u clip=%u/%u gain=%u/%u",
                 stats->analysis_frames,stats->analysis_average_us,stats->analysis_max_us,
                 stats->latest_analysis.flags,stats->latest_analysis.tdoa_samples_q8_8,
                 stats->latest_analysis.confidence_q15,stats->latest_analysis.coherence_q15,
                 stats->latest_analysis.high_frequency_q15,stats->latest_analysis.motor_q15,
                 stats->latest_analysis.clip_left_count,stats->latest_analysis.clip_right_count,
-                (unsigned)stats->vad_enabled,(unsigned)stats->vad_open,
                 (unsigned)stats->output_gain_x,(unsigned)stats->right_output_gain_x);
             last_analysis=now;
         }
@@ -1881,9 +1868,6 @@ static void mic_audio_task(void *arg)
      * worker to the communication core lets it run in parallel with the DSP
      * owner instead of behind it. MIC_FRAME_DISPATCH_TASK_CORE keeps the
      * choice in one place so it can be reverted by a single edit. */
-#ifndef MIC_FRAME_DISPATCH_TASK_CORE
-#define MIC_FRAME_DISPATCH_TASK_CORE DUAL_END_COMM_TASK_CORE
-#endif
 #if MIC_TASK_PSRAM_STACK
     BaseType_t frame_dispatch_ok=capture_ok==pdPASS ? xTaskCreatePinnedToCoreWithCaps(
         mic_frame_dispatch_task_fn,"mic_frame_dispatch",MIC_FRAME_DISPATCH_TASK_STACK,NULL,
@@ -2070,7 +2054,7 @@ static void mic_audio_task(void *arg)
                  * Version zero is unavailable, not a measured healthy result. */
 
                 /* Complete 16kHz block after existing per-channel DSP, before
-                 * shared device VAD/codec. Fused PCM is dual_mono, not raw L/R.
+                 * codec dispatch. Fused PCM is dual_mono, not raw L/R.
                  * Mode 0 is an untouched branch with no estimation/NLMS work. */
                 uint32_t spatial_elapsed_us=0;
                 mic_nlms_block_t nlms_block = {0};
@@ -2088,7 +2072,6 @@ static void mic_audio_task(void *arg)
                     portEXIT_CRITICAL(&s_config_lock);
                 /* NLMS was removed in 0.5.27; the observer would only return zeros. */
                 }
-                mic_vad_process(pcm_buf);
                 stats_output_frames += MIC_OUTPUT_FRAMES_PER_PACKET;
                 for (size_t output_frame = 0;
                      output_frame < MIC_OUTPUT_FRAMES_PER_PACKET;
@@ -2205,17 +2188,11 @@ static void mic_audio_task(void *arg)
                 .analysis_max_us = analysis_max_us,
                 .latest_analysis = latest_analysis,
             };
-            /* Read the applied state once with the same lock used by control
-             * GETs. Configuration and gate state are at snapshot time; RMS is
-             * over the preceding interval, which may include a setting change.
-             * Do not report an enabled VAD as disabled or requested gain as
-             * applied gain. The callback remains optional and disabled by the
-             * existing runtime-log policy; no extra per-frame logging. */
+            /* Read applied settings under the same lock used by control GETs.
+             * The RMS interval may include a setting change. */
             portENTER_CRITICAL(&s_config_lock);
             stats.output_gain_x = (uint8_t)s_config[2];
             stats.right_output_gain_x = (uint8_t)s_config[3];
-            stats.vad_enabled = s_config[1] != 0;
-            stats.vad_open = s_vad_open;
             stats.spatial = s_spatial->stats;
             stats.spatial_requested_mode = s_spatial_requested_mode;
             stats.spatial_processing_average_us = s_spatial_work_frames ? (uint32_t)(s_spatial_work_us/s_spatial_work_frames) : 0;
@@ -2371,16 +2348,25 @@ esp_err_t mic_audio_set_output_gain(uint8_t gain_x, bool persist)
         ESP_RETURN_ON_ERROR(ret, TAG, "persist microphone gain config");
     }
 
+    /* Persistence is independent of the session-only DSP state. A host may
+     * first set both channels through DSP parameters and then save that gain. */
     s_requested_output_gain_x = gain_x;
     portENTER_CRITICAL(&s_config_lock);
-    s_requested_config[2]=s_requested_config[3]=gain_x; ++s_config_generation;
+    const bool gain_unchanged = s_requested_config[2] == gain_x &&
+                                s_requested_config[3] == gain_x;
+    if (!gain_unchanged) {
+        s_requested_config[2]=s_requested_config[3]=gain_x;
+        ++s_config_generation;
+    }
     portEXIT_CRITICAL(&s_config_lock);
-    if (s_mic_task_handle == NULL) {
-        s_output_gain_x = gain_x;
-    } else {
-        /* Wake only the DSP owner; this local gain path never needs the
-         * asynchronous sender/config worker. */
-        xTaskNotifyGive(s_mic_task_handle);
+    if (!gain_unchanged) {
+        if (s_mic_task_handle == NULL) {
+            s_output_gain_x = gain_x;
+        } else {
+            /* Wake only the DSP owner; this local gain path never needs the
+             * asynchronous sender/config worker. */
+            xTaskNotifyGive(s_mic_task_handle);
+        }
     }
     ESP_LOGI(TAG,
              "fixed gain set to %ux (%.2fdB)%s",

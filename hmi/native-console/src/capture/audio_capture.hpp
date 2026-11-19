@@ -1,5 +1,7 @@
 #pragma once
 
+#include "audio/input_agc.hpp"
+
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -75,7 +77,7 @@ public:
     // two, and fuses them here instead of accepting the OS downmix.
     bool start(Sink sink, std::string *error, Fusion fusion);
     // The richer callback keeps the original stereo samples alongside mono.
-    bool start_blocks(BlockSink sink, std::string *error, Fusion fusion = Fusion::Mean);
+    bool start_blocks(BlockSink sink, std::string *error, Fusion fusion = Fusion::Left);
     void stop();
     bool running() const noexcept;
 
@@ -83,6 +85,13 @@ public:
     Format stream_format() const noexcept; // what the sink receives: 16 kHz mono float
     Fusion fusion() const noexcept;
     int stream_channels() const noexcept; // 2 when the endpoint offered stereo
+
+    // Host-side input enhancement. The firmware ships a fixed 1.0x gain, so the
+    // console applies the same AGC the shipping client uses, on the fused mono
+    // stream, before the sink sees it. Off falls back to one manual gain.
+    void set_agc(audio::AgcLevel level, float manual_gain = 1.0f) noexcept;
+    audio::AgcLevel agc() const noexcept;
+    audio::InputAgcStatistics agc_statistics() const;
 
     float level() const noexcept; // 0..1 RMS of the last block
     // Detached counters survive stop(); no logging or allocation in the sink.

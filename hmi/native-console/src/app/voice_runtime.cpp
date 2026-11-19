@@ -14,6 +14,7 @@
 #include "base/logger.hpp"
 #include "base/project_paths.hpp"
 #include "app/voice_history.hpp"
+#include "audio/input_agc.hpp"
 #include "audio/playback_diagnostics.hpp"
 
 #include <windows.h>
@@ -1132,10 +1133,24 @@ struct VoiceRuntime::Impl
                         else if (text == "left") fusion = capture::Fusion::Left;
                         else if (text == "right") fusion = capture::Fusion::Right;
                     }
+                    // Host AGC mirrors the shipping client: the firmware runs a
+                    // fixed 1.0x gain, so without this quiet speech reaches the
+                    // VAD and the ASR below their working level.
+                    audio::AgcLevel agc_level = audio::AgcLevel::Standard;
+                    if (!audio::parse_agc_level(options.capture_agc, agc_level)) agc_level = audio::AgcLevel::Standard;
+                    char *agc_env = nullptr;
+                    std::size_t agc_env_size = 0;
+                    _dupenv_s(&agc_env, &agc_env_size, "HMI_CAPTURE_AGC");
+                    const std::unique_ptr<char, decltype(&std::free)> agc_owner(agc_env, &std::free);
+                    if (agc_env)
+                    {
+                        audio::AgcLevel parsed = agc_level;
+                        if (audio::parse_agc_level(agc_env, parsed)) agc_level = parsed;
+                    }
+                    capture.set_agc(agc_level, audio::environment_manual_gain());
                     const bool started = capture.start_blocks([this](const capture::AudioBlock &block) {
                         audio(block.mono, block.frames, block.interleaved, block.channels);
-                    }, &error, fusion);
-                    bool released = false;
+                    }, &error, fusion);                    bool released = false;
                     Recording failed;
                     {
                         std::lock_guard lock(queue_mutex);
@@ -1187,7 +1202,13 @@ struct VoiceRuntime::Impl
                     if (logger) logger->write(base::LogLevel::Info, "capture", "request_id=" +
                         std::to_string(active_request_id.load()) + " microphone opened on shortcut; device_hz=" +
                         std::to_string(native.sample_rate) + " stream_hz=16000 mono_channels=1 capture_channels=" +
-                        std::to_string(capture.stream_channels()));
+                        std::to_string(capture.stream_channels()) + " fusion=" +
+                        (fusion == capture::Fusion::Left ? "left" :
+                         fusion == capture::Fusion::Right ? "right" :
+                         fusion == capture::Fusion::Best ? "best" : "mean") +
+                        " agc=" + std::string(audio::agc_level_name(capture.agc())) +
+                        " agc_manual_gain=" + std::to_string(capture.agc() == audio::AgcLevel::Off ?
+                                                              audio::environment_manual_gain() : 1.0f));
                     if (!released && !stopping.load()) status(VoiceState::Listening, "Listening... Release the shortcut to transcribe.");
                     queue_ready.notify_one();
                     continue;

@@ -849,11 +849,15 @@ esp_err_t dual_end_audio_sender_start(void)
     memset(&s_last_owner_timing, 0, sizeof(s_last_owner_timing));
     s_owner_timing_produced_generation = 0;
     s_owner_timing_consumed_generation = 0;
+    /* Reset the recovery cache BEFORE publishing the sender mutex/queue. Once
+     * they exist another task may start a session through the normal path, and
+     * a late reset here would clear that live session, leaving every following
+     * NACK bound to a stale identity until the next rebuild. */
+    audio_recovery_tx_reset(s_recovery_cache, 0);
     s_sender_mutex = xSemaphoreCreateMutex();
     s_recovery_queue = xQueueCreate(8, sizeof(audio_recovery_control_event_t));
     ESP_RETURN_ON_FALSE(s_sender_mutex != NULL && s_recovery_queue != NULL,
                         ESP_ERR_NO_MEM, TAG, "allocate audio recovery controls");
-    audio_recovery_tx_reset(s_recovery_cache, 0);
     ESP_RETURN_ON_ERROR(ensure_g722_encoder(), TAG, "init G722 encoder");
     memset(&s_last_tx_log_stats, 0, sizeof(s_last_tx_log_stats));
     dual_end_espnow_link_get_stats(&s_last_tx_log_stats);
@@ -1028,6 +1032,17 @@ esp_err_t dual_end_audio_sender_send_pcm_with_hardware_and_analysis(
     const dual_end_hid_input_payload_t *hardware_payload,
     const dual_end_audio_analysis_metadata_t *analysis_metadata)
 {
+    return dual_end_audio_sender_send_pcm_with_hardware_and_analysis_at(
+        pcm, samples, hardware_payload, analysis_metadata, esp_timer_get_time());
+}
+
+esp_err_t dual_end_audio_sender_send_pcm_with_hardware_and_analysis_at(
+    const int16_t *pcm,
+    size_t samples,
+    const dual_end_hid_input_payload_t *hardware_payload,
+    const dual_end_audio_analysis_metadata_t *analysis_metadata,
+    int64_t created_us)
+{
     if ((!pcm || samples != DUAL_END_AUDIO_FRAME_SAMPLE_VALUES) && s_sender_mutex) {
         xSemaphoreTake(s_sender_mutex, portMAX_DELAY);
         s_encode_attempt_pending = false;
@@ -1043,15 +1058,15 @@ esp_err_t dual_end_audio_sender_send_pcm_with_hardware_and_analysis(
     ESP_RETURN_ON_FALSE(s_sender_mutex != NULL, ESP_ERR_INVALID_STATE, TAG,
                         "audio sender is not started");
 
-    const int64_t created_us = esp_timer_get_time();
+    const int64_t admitted_us = esp_timer_get_time();
     xSemaphoreTake(s_sender_mutex, portMAX_DELAY);
     const int64_t sender_locked_us = esp_timer_get_time();
     memset(&s_last_owner_timing, 0, sizeof(s_last_owner_timing));
     s_last_owner_timing.valid = true;
     ++s_owner_timing_produced_generation;
-    s_last_owner_timing.mutex_wait_us = sender_locked_us <= created_us ? 0U :
-        ((uint64_t)(sender_locked_us - created_us) > UINT32_MAX) ? UINT32_MAX :
-        (uint32_t)(sender_locked_us - created_us);
+    s_last_owner_timing.mutex_wait_us = sender_locked_us <= admitted_us ? 0U :
+        ((uint64_t)(sender_locked_us - admitted_us) > UINT32_MAX) ? UINT32_MAX :
+        (uint32_t)(sender_locked_us - admitted_us);
     s_last_owner_timing.codec = s_tx_codec;
     s_last_owner_timing.session_id = s_session_id;
     /* Fresh admission evidence for this callback; no earlier frame's outcome
@@ -1080,7 +1095,7 @@ esp_err_t dual_end_audio_sender_send_pcm_with_hardware_and_analysis(
         s_pending_input_flags |= hardware_payload->flags;
     }
     s_pending_input_flags |= dual_end_espnow_link_take_unsent_input_flags();
-    sender_send_begin_locked(created_us);
+    sender_send_begin_locked(sender_locked_us);
     if (!s_session_ready) {
         s_encode_attempt_outcome = DUAL_END_OUTCOME_WAIT_ACK;
         s_recovery_stats.waiting_frames++;
@@ -1206,10 +1221,15 @@ esp_err_t dual_end_audio_sender_send_pcm_with_hardware_and_analysis(
     const size_t packet_len = sizeof(dual_end_packet_header_t) +
                               s_tx_packet.packet.payload_len;
     const int64_t radio_submit_started_us = esp_timer_get_time();
-    const esp_err_t ret = dual_end_espnow_link_send_audio_at(
-        &s_tx_packet, (int)packet_len, created_us);
-    const int64_t radio_submit_us = esp_timer_get_time() - radio_submit_started_us;
-    s_last_owner_timing.radio_submitted = true;
+    /* Encoding and sender-lock waits consume the original capture budget.
+     * The radio worker applies the same timestamp again before driver submit. */
+    const bool radio_within_budget = dual_end_audio_deadline_valid(
+        radio_submit_started_us, created_us);
+    const esp_err_t ret = radio_within_budget ? dual_end_espnow_link_send_audio_at(
+        &s_tx_packet, (int)packet_len, created_us) : ESP_ERR_TIMEOUT;
+    const int64_t radio_submit_us = radio_within_budget ?
+        esp_timer_get_time() - radio_submit_started_us : 0;
+    s_last_owner_timing.radio_submitted = radio_within_budget;
     s_last_owner_timing.radio_submit_us = radio_submit_us <= 0 ? 0U :
         ((uint64_t)radio_submit_us > UINT32_MAX ? UINT32_MAX : (uint32_t)radio_submit_us);
     s_last_owner_timing.radio_ok = ret == ESP_OK;
@@ -1218,7 +1238,8 @@ esp_err_t dual_end_audio_sender_send_pcm_with_hardware_and_analysis(
      * radio-queue submission explicitly so it cannot be reported as OK. */
     if (ret != ESP_OK) {
         s_encode_attempt_success=false;
-        s_encode_attempt_outcome=DUAL_END_OUTCOME_OPERATION_FAILED;
+        s_encode_attempt_outcome=radio_within_budget ? DUAL_END_OUTCOME_OPERATION_FAILED :
+            DUAL_END_OUTCOME_DEADLINE;
     }
     s_pending_input_flags = ret == ESP_OK ? 0 : s_tx_packet.payload.hardware.flags;
     if (ret != ESP_OK) {

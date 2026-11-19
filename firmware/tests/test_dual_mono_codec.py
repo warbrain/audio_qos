@@ -15,7 +15,7 @@ SENDER = ROOT / "scepter/components/dual_end_audio"
 
 def definition(source: str, name: str) -> str:
     """Select a definition, never an earlier wrapper call of the same name."""
-    match = re.search(r"(?m)^(?:static )?(?:void|esp_err_t|bool|dual_end_owner_outcome_t) " + re.escape(name) + r"\(", source)
+    match = re.search(r"(?m)^(?:static )?(?:void|esp_err_t|bool|dual_end_owner_outcome_t|const char \*)\s*" + re.escape(name) + r"\(", source)
     assert match is not None, name
     opening = source.index("{", match.start())
     depth, end = 1, opening + 1
@@ -88,6 +88,7 @@ void esp_g722_enc_close(void *);
 """, encoding="utf-8")
     source = (SENDER / "dual_end_audio.c").read_text(encoding="utf-8")
     extracted = "\n".join(definition(source, name) for name in (
+        "codec_profile_name", "codec_fec_state",
         "ensure_g722_encoder", "g722_encode_frame", "sender_reset_encoders_locked",
         "sender_invalidate_session_locked", "sender_new_session_locked",
         "dual_end_audio_sender_set_processing_layout",
@@ -96,6 +97,7 @@ void esp_g722_enc_close(void *);
         "dual_end_audio_sender_copy_last_owner_timing",
         "sender_current_owner_outcome",
         "dual_end_audio_sender_record_mic_work",
+        "dual_end_audio_sender_send_pcm_with_hardware_and_analysis_at",
         "dual_end_audio_sender_send_pcm_with_hardware_and_analysis",
     ))
     harness = tmp_path / "sender_dual_mono_actual.c"
@@ -197,6 +199,7 @@ static bool link_connected=true,radio_paused;
   static esp_err_t power_result=ESP_OK,radio_result=ESP_OK;
 static int64_t clock_us=10000;
 static int64_t clock_step=1;
+static int64_t last_created_us;
 static int64_t esp_timer_get_time(void){clock_us+=clock_step;return clock_us;}
 static uint32_t esp_random(void){static uint32_t seed=100;return ++seed;}
 static const char *esp_err_to_name(esp_err_t error){(void)error;return "mock";}
@@ -214,7 +217,7 @@ static int64_t s_session_last_begin_us;
 static audio_recovery_tx_t cache;
 static audio_recovery_tx_t *s_recovery_cache=&cache;
 static struct { unsigned sessions,waiting_frames; } s_recovery_stats;
-static uint32_t s_encode_max_us;
+static uint32_t s_encode_max_us,s_last_encoded_bytes;
 static bool s_encode_attempt_pending,s_encode_attempt_success;
 static dual_end_owner_outcome_t s_encode_attempt_outcome=DUAL_END_OUTCOME_UNCLASSIFIED;
 static uint8_t s_encode_attempt_codec;
@@ -240,7 +243,7 @@ static uint8_t dual_end_espnow_link_take_unsent_input_flags(void){return 0;}
 static esp_err_t dual_end_espnow_link_set_tx_power(int8_t p){(void)p;return power_result;}
 static void dual_end_espnow_link_get_stats(dual_end_espnow_link_stats_t *s){memset(s,0,sizeof(*s));}
  static esp_err_t dual_end_espnow_link_send_audio_at(const void *p,int size,int64_t created) {
-     (void)created;assert(size==400);last_packet=*(const test_packet_t*)p;++admitted;return radio_result;
+     last_created_us=created;assert(size==400);last_packet=*(const test_packet_t*)p;++admitted;return radio_result;
 }
 static void dual_end_runtime_record(int stage,uint8_t codec,uint32_t session,int64_t elapsed,bool ok){
  (void)stage;(void)codec;(void)session;(void)elapsed;(void)ok;}
@@ -412,6 +415,30 @@ int main(void) {
     assert(timing.encode_ok && timing.radio_submitted && !timing.radio_ok);
     mic_outcome(DUAL_END_OUTCOME_OPERATION_FAILED);radio_result=ESP_OK;
     mic_outcome(DUAL_END_OUTCOME_UNCLASSIFIED); /* No stale successful attempt. */
+    /* Captured PCM retains its age before admission and through radio/cache.
+     * Queue age must not be misreported as sender mutex wait. */
+    const int64_t captured_us=clock_us-50000;
+    assert(dual_end_audio_sender_send_pcm_with_hardware_and_analysis_at(
+        pcm,640,NULL,NULL,captured_us)==ESP_OK);
+    assert(last_created_us==captured_us);
+    assert(cache.entries[last_packet.packet.sequence%DUAL_END_AUDIO_TX_CACHE_WINDOW].created_us==captured_us);
+    assert(dual_end_audio_sender_copy_last_owner_timing(&timing));
+    assert(timing.mutex_wait_us==1U);
+    mic_outcome(DUAL_END_OUTCOME_OK);
+    sdk_before=sdk_calls[0]+sdk_calls[1];admitted_before=admitted;
+    assert(dual_end_audio_sender_send_pcm_with_hardware_and_analysis_at(
+        pcm,640,NULL,NULL,clock_us-DUAL_END_AUDIO_TX_MAX_AGE_US)==ESP_ERR_TIMEOUT);
+    assert(sdk_calls[0]+sdk_calls[1]==sdk_before && admitted==admitted_before);
+    mic_outcome(DUAL_END_OUTCOME_DEADLINE);
+    /* Fresh at encoder entry, expired before submit. Preserve encoder/cache
+     * history but do not admit a late packet into the radio queue. */
+    clock_step=10000;
+    assert(dual_end_audio_sender_send_pcm_with_hardware_and_analysis_at(
+        pcm,640,NULL,NULL,clock_us-50000)==ESP_ERR_TIMEOUT);
+    assert(admitted==admitted_before);
+    assert(dual_end_audio_sender_copy_last_owner_timing(&timing));
+    assert(timing.encode_attempted && timing.encode_ok && !timing.radio_submitted);
+    mic_outcome(DUAL_END_OUTCOME_DEADLINE);clock_step=1;
     unsigned records_before=outcome_records;s_sender_mutex=NULL;
     dual_end_audio_sender_record_mic_work(1234);assert(outcome_records==records_before);
     s_sender_mutex=(void*)1;

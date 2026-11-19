@@ -41,3 +41,12 @@ __pycache__/
 # Local test artifacts
 _build/
 _asr_sim/**/capture*/
+
+# Training workspace (code kept, weights/data ignored)
+_train/code/ckpt*.pt
+_train/data/
+# 采集音频（体积大，可再生成）
+_asr_sim/spatial_dir/
+_asr_sim/snr_threshold/
+# 模型权重
+_train/code/*.pt

@@ -8,6 +8,9 @@
 #include "esp_log.h"
 #include "esp_rom_sys.h"
 #include "esp_sleep.h"
+#include "esp_timer.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
 static const char *TAG = "light_sleep";
 
@@ -43,21 +46,39 @@ static uint64_t active_wakeup_mask(const light_sleep_module_wakeup_io_t *wake_io
 static bool wait_wakeup_ios_idle(const light_sleep_module_wakeup_io_t *wake_ios,
                                  size_t wake_io_count)
 {
-    uint32_t waited_us = 0;
-    uint32_t stable_idle_us = 0;
+    /* Measure wall-clock time and yield between polls. The previous loop spun
+     * on esp_rom_delay_us for the whole idle window (300 ms stable, up to 1 s
+     * budget) while audio was still running, burning a core at full speed. */
+    const int64_t start_us = esp_timer_get_time();
+    int64_t last_us = start_us;
+    int64_t stable_idle_us = 0;
 
-    while (waited_us < s_config.int_idle_wait_us) {
+    for (;;) {
+        const int64_t now_us = esp_timer_get_time();
+        if ((now_us - start_us) >= (int64_t)s_config.int_idle_wait_us) {
+            break;
+        }
+        const int64_t delta_us = now_us - last_us;
+        last_us = now_us;
+
         if (active_wakeup_mask(wake_ios, wake_io_count) == 0) {
-            stable_idle_us += s_config.int_idle_step_us;
-            if (stable_idle_us >= s_config.int_idle_stable_us) {
+            stable_idle_us += delta_us;
+            if (stable_idle_us >= (int64_t)s_config.int_idle_stable_us) {
                 return true;
             }
         } else {
             stable_idle_us = 0;
         }
 
-        esp_rom_delay_us(s_config.int_idle_step_us);
-        waited_us += s_config.int_idle_step_us;
+        /* int_idle_step_us is MICROseconds: convert to milliseconds before
+         * handing it to pdMS_TO_TICKS, which expects milliseconds. Passing the
+         * raw value would sleep 1000 ms per iteration and exhaust the whole
+         * idle budget on the first loop, so sleep never started. */
+        if (s_config.int_idle_step_us >= 1000) {
+            vTaskDelay(pdMS_TO_TICKS(s_config.int_idle_step_us / 1000U));
+        } else {
+            esp_rom_delay_us(s_config.int_idle_step_us);
+        }
     }
 
     return false;

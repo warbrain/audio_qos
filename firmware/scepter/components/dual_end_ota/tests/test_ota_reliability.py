@@ -61,8 +61,9 @@ static const char *scepter_role_name(scepter_role_t r) { return r==1?"scepter":"
 typedef int BaseType_t;
 typedef int portMUX_TYPE;
 #define portMUX_INITIALIZER_UNLOCKED 0
-#define portENTER_CRITICAL(x) ((void)0)
-#define portEXIT_CRITICAL(x) ((void)0)
+static unsigned critical_depth;
+#define portENTER_CRITICAL(x) (++critical_depth)
+#define portEXIT_CRITICAL(x) (--critical_depth)
 #define pdTRUE 1
 #define pdPASS 1
 #define pdMS_TO_TICKS(x) (x)
@@ -82,6 +83,8 @@ static int xQueueSend(QueueHandle_t q,const void *v,unsigned ticks){(void)q;(voi
 static int xQueueReceive(QueueHandle_t q,void *v,unsigned ticks){(void)q;(void)v;(void)ticks;return 0;}
 static void vQueueDelete(QueueHandle_t q){(void)q;}
 static int xTaskCreate(void(*fn)(void*),const char*n,unsigned st,void*a,unsigned p,void*t){(void)fn;(void)n;(void)st;(void)a;(void)p;(void)t;return 1;}
+#define DUAL_END_COMM_TASK_CORE 0
+#define xTaskCreatePinnedToCore(f,n,s,a,p,t,c) xTaskCreate(f,n,s,a,p,t)
 static unsigned event_order,last_write_order,last_delay_order,last_send_order;
 static unsigned delay_count,last_delay_ticks;
 static void vTaskDelay(unsigned x){++delay_count;last_delay_ticks=x;last_delay_order=++event_order;}
@@ -112,10 +115,11 @@ static int invalid_project;
 static int esp_ota_get_partition_description(const esp_partition_t*p,esp_app_desc_t*d){(void)p;*d=app;if(invalid_project)strcpy(d->project_name,"wrong");return 0;}
 typedef unsigned esp_ota_handle_t;
 static int writes,aborts,ends,begin_calls,ota_write_error,ota_end_error,boot_error;
-static int esp_ota_begin(const esp_partition_t*p,uint32_t sz,esp_ota_handle_t*h){(void)p;assert(sz==OTA_WITH_SEQUENTIAL_WRITES);++begin_calls;*h=1;return 0;}
-static int esp_ota_write(esp_ota_handle_t h,const void*p,size_t n){assert(h==1&&p&&n);++writes;last_write_order=++event_order;return ota_write_error;}
-static int esp_ota_end(esp_ota_handle_t h){assert(h==1);++ends;return ota_end_error;}
-static int esp_ota_abort(esp_ota_handle_t h){assert(h==1);++aborts;return 0;}
+static void (*flash_hook)(void);
+static int esp_ota_begin(const esp_partition_t*p,uint32_t sz,esp_ota_handle_t*h){(void)p;assert(sz==OTA_WITH_SEQUENTIAL_WRITES);if(flash_hook)flash_hook();++begin_calls;*h=1;return 0;}
+static int esp_ota_write(esp_ota_handle_t h,const void*p,size_t n){assert(h==1&&p&&n);if(flash_hook)flash_hook();++writes;last_write_order=++event_order;return ota_write_error;}
+static int esp_ota_end(esp_ota_handle_t h){assert(h==1);if(flash_hook)flash_hook();++ends;return ota_end_error;}
+static int esp_ota_abort(esp_ota_handle_t h){assert(h==1);if(flash_hook)flash_hook();++aborts;return 0;}
 static int esp_ota_set_boot_partition(const esp_partition_t*p){if(boot_error)return boot_error;boot=p;return 0;}
 static int esp_partition_erase_range(const esp_partition_t*p,unsigned o,unsigned n){(void)p;(void)o;(void)n;return 0;}
 #define CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE 0
@@ -147,15 +151,34 @@ static void nvs_close(nvs_handle_t h){(void)h;}
 CASES = r'''
 static dual_end_ota_packet_t last_sent;
 static int sends,send_error;
-static bool activity;
-static void note_activity(bool active,void*ctx){(void)ctx;activity=active;}
+static bool activity,probe_activity;
+static unsigned activity_starts,activity_stops,flash_probes;
+static void note_activity(bool active,void*ctx){
+ (void)ctx;activity=active;
+ if(probe_activity){
+  assert(!critical_depth&&s_writer_busy&&dual_end_ota_get_status().active);
+  assert(dual_end_ota_self_begin(DUAL_END_OTA_TARGET_SCEPTER,99,3,0)==ESP_ERR_INVALID_STATE);
+  if(active)++activity_starts;else ++activity_stops;
+ }
+}
+static void probe_flash_reservation(void){
+ assert(!critical_depth&&s_writer_busy&&dual_end_ota_get_status().active);++flash_probes;
+ assert(dual_end_ota_self_begin(DUAL_END_OTA_TARGET_SCEPTER,99,3,0)==ESP_ERR_INVALID_STATE);
+ assert(dual_end_ota_self_write((const uint8_t*)"abc",3)==ESP_ERR_INVALID_STATE);
+ assert(dual_end_ota_self_finish(false)==ESP_ERR_INVALID_STATE);
+ assert(dual_end_ota_erase_partition("ota_1")==ESP_ERR_INVALID_STATE);
+ assert(dual_end_ota_set_boot_partition_label("ota_1")==ESP_ERR_INVALID_STATE);
+ dual_end_ota_self_abort();ota_writer_abort(OTA_WRITER_WIRELESS);
+ assert(s_writer_busy&&dual_end_ota_get_status().active);
+}
 static int test_send(const void *p,int len){assert(len>0);last_sent=*(const dual_end_ota_packet_t*)p;++sends;last_send_order=++event_order;return send_error;}
 static void reset(void){
- dual_end_ota_self_abort(); boot=&running;writes=aborts=ends=begin_calls=restarts=0;
+ flash_hook=NULL;probe_activity=false;ota_writer_abort(OTA_WRITER_WIRELESS);dual_end_ota_self_abort(); boot=&running;writes=aborts=ends=begin_calls=restarts=0;
  ota_write_error=ota_end_error=boot_error=invalid_project=nvs_error=send_error=0;stored_len=0;
  event_order=last_write_order=last_delay_order=last_send_order=delay_count=last_delay_ticks=0;
  s_relay_active=false;s_boot_confirmed=true;s_service_role=SCEPTER_ROLE_SCEPTER;
  s_wireless_session=false;activity=false;wait_hook=NULL;sends=0;
+ activity_starts=activity_stops=flash_probes=critical_depth=0;
 }
 static dual_end_ota_packet_t begin_packet(void){
  dual_end_ota_packet_t p={0};p.magic=DUAL_END_OTA_MAGIC;p.version=DUAL_END_OTA_VERSION;
@@ -219,6 +242,43 @@ int main(void){
  assert(!dual_end_ota_packet_valid(&d,34)&&!dual_end_ota_packet_valid(&d,36));
  assert(!dual_end_ota_handle_scepter_espnow_packet((void*)&d,-1));
  puts("safe boot partition and exact wire size: passed");
+ reset();probe_activity=true;flash_hook=probe_flash_reservation;
+ b=begin_packet();d=data_packet();process_wireless_packet(&b);
+ assert(s_writer_source==OTA_WRITER_WIRELESS&&activity&&activity_starts==1);
+ assert(dual_end_ota_self_begin(DUAL_END_OTA_TARGET_SCEPTER,99,3,0)==ESP_ERR_INVALID_STATE);
+ assert(dual_end_ota_self_write((const uint8_t*)"abc",3)==ESP_ERR_INVALID_STATE);
+ assert(dual_end_ota_self_finish(false)==ESP_ERR_INVALID_STATE);
+ dual_end_ota_self_abort();assert(s_status.active&&activity&&aborts==0);
+ assert(dual_end_ota_erase_partition("ota_1")==ESP_ERR_INVALID_STATE);
+ assert(dual_end_ota_set_boot_partition_label("ota_1")==ESP_ERR_INVALID_STATE);
+ e=b;e.msg_type=DUAL_END_OTA_MSG_ABORT;++e.session_id;process_wireless_packet(&e);
+ assert(s_status.active&&activity&&ack().status==DUAL_END_OTA_ACK_REJECTED);
+ process_wireless_packet(&d);assert(writes==1&&s_status.bytes_written==3);
+ e.session_id=b.session_id;process_wireless_packet(&e);
+ assert(!s_status.active&&!activity&&s_writer_source==OTA_WRITER_NONE&&aborts==1);
+ assert(activity_starts==1&&activity_stops==1&&flash_probes==3);
+ reset();probe_activity=true;flash_hook=probe_flash_reservation;b=begin_packet();d=data_packet();
+ assert(dual_end_ota_self_begin(DUAL_END_OTA_TARGET_SCEPTER,71,3,b.image_crc32)==ESP_OK);
+ process_wireless_packet(&b);assert(ack().status==DUAL_END_OTA_ACK_REJECTED&&begin_calls==1);
+ process_wireless_packet(&d);assert(ack().status==DUAL_END_OTA_ACK_REJECTED&&writes==0);
+ e=b;e.msg_type=DUAL_END_OTA_MSG_ABORT;process_wireless_packet(&e);
+ assert(s_status.active&&activity&&aborts==0&&s_writer_source==OTA_WRITER_LOCAL);
+ assert(dual_end_ota_self_write((const uint8_t*)"abc",3)==ESP_OK);
+ assert(dual_end_ota_self_finish(false)==ESP_OK);
+ assert(!activity&&s_writer_source==OTA_WRITER_NONE&&activity_starts==1&&activity_stops==1&&flash_probes==3);
+ puts("USB/wireless ownership, wrong-source abort and callback/flash reentry reservation: passed");
+ reset();assert(ota_writer_enter(OTA_WRITER_MAINTENANCE,true));
+ dual_end_ota_packet_t reboot={0};reboot.msg_type=DUAL_END_OTA_MSG_REBOOT;
+ process_wireless_packet(&reboot);
+ assert(ack().status==DUAL_END_OTA_ACK_REJECTED&&restarts==0&&s_writer_busy);
+ ota_writer_leave(true);process_wireless_packet(&reboot);
+ assert(ack().status==DUAL_END_OTA_ACK_ACCEPTED&&restarts==1&&s_writer_busy);
+ assert(dual_end_ota_get_status().active&&s_writer_source==OTA_WRITER_MAINTENANCE);
+ assert(dual_end_ota_self_begin(DUAL_END_OTA_TARGET_SCEPTER,99,3,0)==ESP_ERR_INVALID_STATE);
+ /* The platform stub returns from restart; real firmware never does. */
+ ota_writer_leave(true);
+ puts("REBOOT rejects maintenance and reserves writer through ACK/restart: passed");
+ e=b;e.msg_type=DUAL_END_OTA_MSG_END;e.sequence=1;e.offset=3;
  reset();s_service_role=SCEPTER_ROLE_DONGLE;s_ack_sem=xSemaphoreCreateBinary();s_result_sem=xSemaphoreCreateBinary();
  s_relay_active=true;s_relay_image_size=3;s_relay_image_crc=b.image_crc32;
  assert(dual_end_ota_prepare_scepter_result(71)==ESP_OK);wait_hook=boot_result_on_wait;
@@ -731,7 +791,7 @@ class OtaReliability(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix="dual_mic_ota_") as temp:
             work = Path(temp)
             (work / "test_platform.h").write_text(PLATFORM)
-            headers = ["driver/uart.h", "esp_app_desc.h", "esp_check.h", "esp_crc.h", "esp_log.h", "esp_mac.h", "esp_now.h", "esp_ota_ops.h", "esp_partition.h", "esp_system.h", "esp_timer.h", "dual_end_espnow_link.h", "dual_end_link_config.h", "freertos/FreeRTOS.h", "freertos/task.h", "freertos/queue.h", "freertos/semphr.h", "nvs.h", "sdkconfig.h", "esp_err.h"]
+            headers = ["dual_end_runtime.h", "driver/uart.h", "esp_app_desc.h", "esp_check.h", "esp_crc.h", "esp_log.h", "esp_mac.h", "esp_now.h", "esp_ota_ops.h", "esp_partition.h", "esp_system.h", "esp_timer.h", "dual_end_espnow_link.h", "dual_end_link_config.h", "freertos/FreeRTOS.h", "freertos/task.h", "freertos/queue.h", "freertos/semphr.h", "nvs.h", "sdkconfig.h", "esp_err.h"]
             for header in headers:
                 target = work / header
                 target.parent.mkdir(parents=True, exist_ok=True)

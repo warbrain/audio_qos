@@ -616,7 +616,9 @@ bool tud_audio_set_itf_cb(uint8_t rhport, tusb_control_request_t const *p_reques
         s_uac_device->mic_stats.mic_stream_opens++;
         s_uac_device->mic_active = true;
         UAC_EXIT_CRITICAL();
-        xTaskNotifyGive(s_uac_device->mic_task_handle);
+        if (s_uac_device->mic_task_handle) {
+            xTaskNotifyGive(s_uac_device->mic_task_handle);
+        }
         TU_LOG1("Microphone interface %d-%d opened", itf, alt);
         printf("Microphone interface %d-%d opened\n", itf, alt);
     }
@@ -827,9 +829,12 @@ esp_err_t uac_device_init(uac_device_config_t *config)
     }
 
 #if MIC_CHANNEL_NUM
-    ret_val = xTaskCreatePinnedToCore(usb_mic_task, "usb_mic_task", 4096, NULL, CONFIG_UAC_MIC_TASK_PRIORITY,
-                                      &s_uac_device->mic_task_handle, DUAL_END_COMM_TASK_CORE);
-    ESP_RETURN_ON_FALSE(ret_val == pdPASS, ESP_FAIL, TAG, "Failed to create usb_mic task");
+    /* Boundary mode produces directly at IN completion and needs no polling task. */
+    if (!config->input_at_usb_boundary) {
+        ret_val = xTaskCreatePinnedToCore(usb_mic_task, "usb_mic_task", 4096, NULL, CONFIG_UAC_MIC_TASK_PRIORITY,
+                                          &s_uac_device->mic_task_handle, DUAL_END_COMM_TASK_CORE);
+        ESP_RETURN_ON_FALSE(ret_val == pdPASS, ESP_FAIL, TAG, "Failed to create usb_mic task");
+    }
 #endif
 
 #if SPEAK_CHANNEL_NUM

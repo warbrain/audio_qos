@@ -64,6 +64,15 @@ idf_component_register(
         spi_flash
 )
 
+# Bench builds: disable the IMU-driven light sleep. It enters after 15 s of
+# stillness, which tears down the ESP-NOW link and makes the next capture come
+# back as digital silence. Production leaves this OFF (sleep stays enabled).
+option(SCEPTER_DISABLE_LIGHT_SLEEP "Disable IMU-driven light sleep (bench testing)" OFF)
+if(SCEPTER_DISABLE_LIGHT_SLEEP)
+    target_compile_definitions(${COMPONENT_LIB} PRIVATE SCEPTER_IMU_SLEEP_ENABLE=0)
+    message(STATUS "Scepter light sleep disabled for this build (bench mode)")
+endif()
+
 if(NOT CMAKE_BUILD_EARLY_EXPANSION)
     set(UI_ANIMATION_BIN "${CMAKE_CURRENT_LIST_DIR}/../animation.bin")
     if(NOT EXISTS "${UI_ANIMATION_BIN}")

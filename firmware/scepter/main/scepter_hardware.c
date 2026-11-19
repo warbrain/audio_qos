@@ -472,6 +472,7 @@ static void touch_packet_stats_on_sent(const dual_end_hid_input_payload_t *paylo
 static void mic_frame_cb(const int16_t *samples,
                          size_t sample_count,
                          const dual_end_audio_analysis_metadata_t *analysis,
+                         int64_t captured_us,
                          void *user_ctx)
 {
     (void)user_ctx;
@@ -514,11 +515,12 @@ static void mic_frame_cb(const int16_t *samples,
     hardware_payload.mouse_buttons |= wake_mouse_button_latch;
     portEXIT_CRITICAL(&s_hid_input_lock);
 
-    esp_err_t ret = dual_end_audio_sender_send_pcm_with_hardware_and_analysis(
+    esp_err_t ret = dual_end_audio_sender_send_pcm_with_hardware_and_analysis_at(
         samples,
         sample_count,
         &hardware_payload,
-        analysis);
+        analysis,
+        captured_us);
     if (ret == ESP_OK) {
 #if SCEPTER_TOUCH_PACKET_STATS_LOGS
         touch_packet_stats_on_sent(&hardware_payload);
@@ -562,7 +564,6 @@ static void mic_stats_cb(const mic_audio_stats_t *stats, void *user_ctx)
              " fixed_gain=%ux right_gain=%ux soft_limit=%" PRIu32 " min_gain=%u/1000"
              " packets/s=%" PRIu32 " sample_values/s=%" PRIu32
              " analysis=%" PRIu32 " avg/max=%" PRIu32 "/%" PRIu32 "us"
-             " vad=%u gate_open=%u"
              " flags=0x%02x tdoa=%d/256 peak/conf/coh=%u/%u/%u"
              " quality=%u/%u hf/motor=%u/%u clip=%u/%u"
              " tx_frames=%" PRIu32 " tx_errors=%" PRIu32,
@@ -586,8 +587,6 @@ static void mic_stats_cb(const mic_audio_stats_t *stats, void *user_ctx)
              stats->analysis_frames,
              stats->analysis_average_us,
              stats->analysis_max_us,
-             (unsigned)stats->vad_enabled,
-             (unsigned)stats->vad_open,
              stats->latest_analysis.flags,
              stats->latest_analysis.tdoa_samples_q8_8,
              stats->latest_analysis.gcc_peak_q15,

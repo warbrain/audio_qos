@@ -1,0 +1,20 @@
+[
+ {
+  "id": "S0119_M-0119-2_068808-069324",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\test\\audio\\hfm\\whisper\\S0119\\S0119_M-0119-2_068808-069324.wav",
+  "reference": "迷人的花香在空气中弥漫让人心中感到愉悦",
+  "speaker": "S0119"
+ },
+ {
+  "id": "S0061_M-0061-2_070236-070836",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\test\\audio\\hfm\\whisper\\S0061\\S0061_M-0061-2_070236-070836.wav",
+  "reference": "一杯香浓的咖啡伴随着晨曦把一天的美好唤醒",
+  "speaker": "S0061"
+ },
+ {
+  "id": "S0189_M-0189-2_011368-011972",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\test\\audio\\hfm\\whisper\\S0189\\S0189_M-0189-2_011368-011972.wav",
+  "reference": "阳光透过树梢洒下一片金黄温暖了小路上的行人的心",
+  "speaker": "S0189"
+ }
+]

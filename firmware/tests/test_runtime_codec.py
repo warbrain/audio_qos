@@ -298,7 +298,7 @@ def test_audio_codec_dispatch_preserves_dsp_and_recovery():
     assert "if (pcm_frames == 0)" in mic
     assert "mic_owner_apply_dsp_config();" in mic
     assert "mic_config_transition_task_fn" in mic
-    assert "s_config[2 + channel]" in mic and "mic_vad_process(pcm_buf)" in mic
+    assert "s_config[2 + channel]" in mic and "mic_frame_dispatch_publish(s_frame_callback" in mic
     assert "dual_end_codec_payload_valid(repair.audio.codec" in rx
     assert "dual_end_codec_payload_valid(packet.audio.codec" in rx
     assert "dual_end_opus_decoder_reset();" in rx
@@ -485,3 +485,174 @@ int main(void) {
         extra_includes=(stubs, CODEC / "include"))
     result = _run([str(executable)], cwd=tmp_path, env=env)
     assert "cleanup PASS (DSP stubbed)" in result.stdout
+
+
+def test_same_runtime_gain_can_be_saved_without_resetting_dsp(tmp_path: Path):
+    source = (ROOT / "scepter/main/mic/mic_audio.c").read_text(encoding="utf-8")
+    setter = function(source, "mic_audio_set_output_gain")
+    harness = tmp_path / "gain_persistence.c"
+    harness.write_text(r'''
+#include <assert.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <stddef.h>
+#include <stdio.h>
+typedef int esp_err_t;
+typedef unsigned nvs_handle_t;
+#define ESP_OK 0
+#define ESP_FAIL -1
+#define ESP_ERR_INVALID_ARG -2
+#define DUAL_END_MIC_GAIN_MIN_X 1
+#define DUAL_END_MIC_GAIN_MAX_X 32
+#define NVS_READWRITE 1
+#define MIC_CONFIG_NVS_NAMESPACE "mic_cfg"
+#define MIC_CONFIG_NVS_GAIN_KEY "fixed_gain_x"
+#define ESP_RETURN_ON_FALSE(condition,error,...) do { if(!(condition))return error; } while(0)
+#define ESP_RETURN_ON_ERROR(expression,...) do { int result=(expression);if(result)return result; } while(0)
+#define ESP_LOGI(...) ((void)0)
+#define portENTER_CRITICAL(lock) ((void)(lock))
+#define portEXIT_CRITICAL(lock) ((void)(lock))
+static int s_config_lock;
+static uint16_t s_requested_config[13];
+static uint32_t s_config_generation;
+static uint8_t s_requested_output_gain_x,s_output_gain_x;
+static void *s_mic_task_handle=(void *)1;
+static unsigned saved_gain=8,pending_gain,commits,notifications,opens,closes;
+static bool commit_fails;
+static int nvs_open(const char *name,int mode,nvs_handle_t *handle) {
+    assert(name && mode==NVS_READWRITE);*handle=7;++opens;return ESP_OK;
+}
+static int nvs_set_u8(nvs_handle_t handle,const char *name,uint8_t gain) {
+    assert(handle==7 && name);pending_gain=gain;return ESP_OK;
+}
+static int nvs_commit(nvs_handle_t handle) {
+    assert(handle==7);++commits;if(commit_fails)return ESP_FAIL;
+    saved_gain=pending_gain;return ESP_OK;
+}
+static void nvs_close(nvs_handle_t handle){assert(handle==7);++closes;}
+static void xTaskNotifyGive(void *task){assert(task==s_mic_task_handle);++notifications;}
+''' + setter + r'''
+int main(void) {
+    /* Session-only DSP writes already changed both channels, but NVS is old. */
+    s_requested_config[2]=s_requested_config[3]=12;
+    s_requested_output_gain_x=8;s_config_generation=7;
+    assert(mic_audio_set_output_gain(12,true)==ESP_OK);
+    assert(saved_gain==12 && commits==1 && s_requested_output_gain_x==12);
+    assert(s_config_generation==7 && notifications==0);
+    assert(mic_audio_set_output_gain(12,false)==ESP_OK);
+    assert(commits==1 && s_config_generation==7 && notifications==0);
+    /* A nonpersistent change can subsequently be saved without another reset. */
+    assert(mic_audio_set_output_gain(16,false)==ESP_OK);
+    assert(saved_gain==12 && s_config_generation==8 && notifications==1);
+    assert(mic_audio_set_output_gain(16,true)==ESP_OK);
+    assert(saved_gain==16 && s_config_generation==8 && notifications==1);
+    commit_fails=true;
+    assert(mic_audio_set_output_gain(20,true)==ESP_FAIL);
+    assert(saved_gain==16 && s_requested_config[2]==16 && s_requested_config[3]==16);
+    assert(s_requested_output_gain_x==16 && s_config_generation==8 && notifications==1);
+    assert(opens==closes);
+    puts("gain persistence without DSP reset PASS");
+    return 0;
+}
+''', encoding="utf-8")
+    executable, environment = _build_host_executable([harness], tmp_path)
+    assert "PASS" in _run([str(executable)], cwd=tmp_path, env=environment).stdout
+
+
+def test_dispatch_rejects_expired_source_and_forwards_capture_time(tmp_path: Path):
+    source = (ROOT / "scepter/main/mic/mic_audio.c").read_text(encoding="utf-8")
+    dispatch = function(source, "mic_frame_dispatch_task_fn")
+    harness = tmp_path / "dispatch_capture_time.c"
+    harness.write_text(r'''
+#include <assert.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <stddef.h>
+#include <setjmp.h>
+#include <stdio.h>
+#include "dual_end_audio_recovery_protocol.h"
+#define pdTRUE 1
+#define portMAX_DELAY UINT32_MAX
+#define MIC_OUTPUT_SAMPLE_VALUES_PER_PACKET 640
+#define portENTER_CRITICAL(lock) ((void)(lock))
+#define portEXIT_CRITICAL(lock) ((void)(lock))
+typedef struct {bool valid;} dual_end_audio_owner_timing_t;
+typedef struct {
+    void (*callback)(const int16_t *,size_t,const dual_end_audio_analysis_metadata_t *,int64_t,void *);
+    void *user_ctx;
+    dual_end_audio_analysis_metadata_t analysis;
+    uint64_t enqueued_us,captured_us;
+    uint32_t boot_id,capture_generation,dispatch_epoch;
+    uint16_t spatial_generation;
+    uint8_t spatial_mode;
+    int16_t pcm[640];
+} mic_frame_dispatch_t;
+typedef struct {
+    dual_end_audio_owner_timing_t timing;
+    uint64_t enqueued_us,dequeued_us,control_ready_us,captured_us,callback_started_us;
+    uint32_t boot_id,capture_generation,dispatch_epoch;
+    uint16_t spatial_generation;
+    uint8_t spatial_mode;
+    uint32_t work_us;
+} mic_owner_timing_event_t;
+static mic_frame_dispatch_t s_frame_dispatch_pool[1];
+static bool s_capture_enabled=true,taken;
+static void *s_frame_dispatch_control=(void *)1,*s_owner_timing_events=(void *)1;
+static uint32_t s_frame_dispatch_unavailable,s_owner_timing_event_drops;
+static int s_pipeline_lock;
+static unsigned waits,releases,invalidated,callbacks;
+static int64_t now_us,forwarded_us;
+static jmp_buf completed;
+static unsigned ulTaskNotifyTake(int clear,unsigned wait) {
+    assert(clear==pdTRUE && wait==portMAX_DELAY);
+    if(waits++)longjmp(completed,1);return 1;
+}
+static bool mic_frame_dispatch_take(uint8_t *slot) {
+    if(taken)return false;taken=true;*slot=0;return true;
+}
+static void mic_frame_dispatch_release(uint8_t slot){assert(slot==0);++releases;}
+static int xSemaphoreTake(void *lock,unsigned wait) {
+    assert(lock==s_frame_dispatch_control && wait==portMAX_DELAY);return pdTRUE;
+}
+static void xSemaphoreGive(void *lock){assert(lock==s_frame_dispatch_control);}
+static int64_t esp_timer_get_time(void){return now_us;}
+static uint32_t mic_frame_dispatch_epoch_load(void){return 7;}
+static void mic_frame_dispatch_note_invalidated(void){++invalidated;}
+static bool dual_end_audio_sender_take_owner_timing(dual_end_audio_owner_timing_t *timing) {
+    (void)timing;return false;
+}
+static int xQueueSend(void *queue,const void *value,unsigned wait) {
+    (void)queue;(void)value;(void)wait;return pdTRUE;
+}
+static void frame_callback(const int16_t *pcm,size_t count,
+    const dual_end_audio_analysis_metadata_t *analysis,int64_t captured_us,void *context) {
+    assert(pcm==s_frame_dispatch_pool[0].pcm && count==640 && analysis);
+    assert(context==s_frame_dispatch_pool);++callbacks;forwarded_us=captured_us;
+}
+''' + dispatch + r'''
+static void run_frame(int64_t current,int64_t captured,bool expected) {
+    now_us=current;waits=0;taken=false;releases=0;invalidated=0;callbacks=0;
+    s_frame_dispatch_pool[0].captured_us=(uint64_t)captured;
+    s_frame_dispatch_pool[0].dispatch_epoch=7;
+    s_frame_dispatch_pool[0].callback=frame_callback;
+    s_frame_dispatch_pool[0].user_ctx=s_frame_dispatch_pool;
+    s_frame_dispatch_pool[0].pcm[0]=1234;
+    if(setjmp(completed)==0)mic_frame_dispatch_task_fn(NULL);
+    assert(releases==1 && callbacks==(expected?1U:0U));
+    assert(invalidated==(expected?0U:1U));
+    assert(s_frame_dispatch_pool[0].pcm[0]==1234);
+    if(expected)assert(forwarded_us==captured);
+}
+int main(void) {
+    run_frame(599999,500000,true);
+    run_frame(600000,500000,false);
+    run_frame(500000,500001,false);
+    puts("dispatch source timestamp and deadline boundary PASS");
+    return 0;
+}
+''', encoding="utf-8")
+    executable, environment = _build_host_executable(
+        [harness], tmp_path,
+        extra_includes=(ROOT / "components/dual_end_audio_recovery/include",
+                        ROOT / "scepter/components/dual_end_common/include"))
+    assert "PASS" in _run([str(executable)], cwd=tmp_path, env=environment).stdout

@@ -25,6 +25,8 @@ static const char *TAG = "touchpad";
 #define TOUCH_READ_RETRY_COUNT   5
 #define TOUCH_READ_RETRY_DELAY_MS 1
 #define TOUCH_USE_INT            1
+/* Fallback poll period when the touch IRQ does not arrive. */
+#define TOUCH_INT_FALLBACK_POLL_MS 20
 #define TOUCH_INT_READ_DELAY_MS  0
 #ifndef TOUCH_STATS_LOG_ENABLED
 #define TOUCH_STATS_LOG_ENABLED  1
@@ -548,7 +550,27 @@ static void touch_task(void *arg)
 
     while (1) {
 #if TOUCH_USE_INT
-        uint32_t irq_events = ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
+        /* Bounded wait: if the IRQ line stays low (or the interrupt is lost
+         * after a failed read) a portMAX_DELAY wait would park this task
+         * forever and the touch panel would never recover. Timing out falls
+         * through to a defensive read, which also surfaces I2C errors. */
+        uint32_t irq_events = ulTaskNotifyTake(pdTRUE,
+                                               pdMS_TO_TICKS(TOUCH_INT_FALLBACK_POLL_MS));
+        if (irq_events == 0) {
+            /* Timeout is the normal idle case, so only read when the panel is
+             * actually asserting INT (active low). Reading unconditionally made
+             * the idle panel produce failed I2C transactions 50 times a second. */
+            if (gpio_get_level(CONFIG_TOUCH_INT_GPIO) != 0) {
+                continue;
+            }
+            static uint32_t s_int_stuck_count;
+            ++s_int_stuck_count;
+            if ((s_int_stuck_count % 100U) == 1U) {
+                ESP_LOGW(TAG,
+                         "touch INT stuck low after timeout, forcing read (count=%" PRIu32 ")",
+                         s_int_stuck_count);
+            }
+        }
 #if TOUCH_STATS_LOG_ENABLED
         if (irq_events > s_touch_max_irq_batch) {
             s_touch_max_irq_batch = irq_events;

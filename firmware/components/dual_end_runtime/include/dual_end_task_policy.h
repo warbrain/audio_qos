@@ -13,10 +13,14 @@
 #else
 #define DUAL_END_POLICY_UNICORE 0
 #endif
-/* Keep both synchronized codecs on one audio owner; Wi-Fi/USB/control on 0.
- * A single-core build safely maps both roles to core 0. Priorities stay local. */
+/* Keep the microphone DSP and receive/decode owners on the audio core.
+ * A single-core build maps both owners to core 0. Priorities stay local. */
 #define DUAL_END_AUDIO_TASK_CORE ((DUAL_END_POLICY_UNICORE || SOC_CPU_CORES_NUM < 2) ? 0 : 1)
 #define DUAL_END_COMM_TASK_CORE 0
+/* Scepter encodes both channels in the frame-dispatch worker. */
+#ifndef MIC_FRAME_DISPATCH_TASK_CORE
+#define MIC_FRAME_DISPATCH_TASK_CORE DUAL_END_COMM_TASK_CORE
+#endif
 static inline unsigned dual_end_policy_audio_core(unsigned cores, bool unicore)
 {
     return unicore || cores < 2 ? 0U : 1U;

@@ -8,6 +8,7 @@ import json
 
 import pytest
 from test_audio_recovery_042 import _build_host_executable, _run
+from test_runtime_codec import function
 
 ROOT = Path(__file__).resolve().parents[1]
 RUNTIME = ROOT / "components/dual_end_runtime"
@@ -44,6 +45,7 @@ int main(void) {{
     assert(dual_end_policy_audio_core(2, true) == 0);
     assert(dual_end_policy_comm_core() == 0);
     assert(DUAL_END_COMM_TASK_CORE == 0);
+    assert(MIC_FRAME_DISPATCH_TASK_CORE == DUAL_END_COMM_TASK_CORE);
     assert(DUAL_END_AUDIO_TASK_CORE < {cores});
     assert(DUAL_END_COMM_TASK_CORE < {cores});
     puts("configured task cores PASS; hardware scheduling not exercised");
@@ -51,6 +53,60 @@ int main(void) {{
 }}
 '''
     assert "configured task cores PASS" in compile_run(tmp_path, code, includes=(stubs,))
+
+
+@pytest.mark.parametrize("dispatch_override", ["", "#define MIC_FRAME_DISPATCH_TASK_CORE 1\n"])
+def test_runtime_affinity_uses_each_stages_producer(tmp_path: Path, dispatch_override: str):
+    (tmp_path / "esp_err.h").write_text("typedef int esp_err_t;\n", encoding="utf-8")
+    source = (RUNTIME / "dual_end_runtime.c").read_text(encoding="utf-8")
+    code = dispatch_override + r"""
+#include <assert.h>
+#include "dual_end_runtime.h"
+
+#define atomic_load_explicit(value, order) (*(value))
+#define RUNTIME_WINDOW_US 5000000
+
+typedef struct {
+    bool active;
+    dual_end_perf_stats_t stats;
+    int64_t started_us, ended_us;
+    void *owner;
+} runtime_window_t;
+
+static runtime_window_t s_windows[DUAL_END_STAGE_COUNT];
+static bool s_enabled = true;
+static void *s_snapshots = &s_enabled;
+static int test_core;
+static int64_t esp_timer_get_time(void) { return 1000; }
+static void *xTaskGetCurrentTaskHandle(void) { return &s_enabled; }
+static int xPortGetCoreID(void) { return test_core; }
+static void runtime_publish(runtime_window_t *window, dual_end_perf_stage_t stage)
+{
+    (void)window;
+    (void)stage;
+    assert(false);
+}
+""" + function(source, "dual_end_runtime_record_outcome") + r"""
+
+int main(void)
+{
+    const int expected[] = {MIC_FRAME_DISPATCH_TASK_CORE, DUAL_END_AUDIO_TASK_CORE,
+                            DUAL_END_AUDIO_TASK_CORE, DUAL_END_AUDIO_TASK_CORE};
+    for (unsigned i = 0; i < DUAL_END_STAGE_COUNT; ++i) {
+        const dual_end_perf_stage_t stage = (dual_end_perf_stage_t)i;
+        test_core = expected[i];
+        dual_end_runtime_record_outcome(stage, 4, 99, 100, DUAL_END_OUTCOME_OK);
+        assert(s_windows[i].stats.expected_core == expected[i]);
+        assert(s_windows[i].stats.samples == 1 && s_windows[i].stats.core_wrong == 0);
+        test_core = 1 - expected[i];
+        dual_end_runtime_record_outcome(stage, 4, 99, 100, DUAL_END_OUTCOME_OK);
+        assert(s_windows[i].stats.samples == 2 && s_windows[i].stats.core_wrong == 1);
+    }
+    return 0;
+}
+"""
+    compile_run(tmp_path, code, sources=(RUNTIME / "dual_end_perf_stats.c",),
+                includes=(tmp_path,))
 
 
 PERF_PREFIX = r"""

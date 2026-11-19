@@ -184,8 +184,8 @@ static esp_err_t send_wireless_ack(const dual_end_ota_packet_t *received,
         .status = error == ESP_OK ? DUAL_END_OTA_ACK_ACCEPTED : DUAL_END_OTA_ACK_REJECTED,
         .duplicate = duplicate,
         .error_code = error,
-        .received = s_status.bytes_written,
-        .rolling_crc32 = s_running_crc,
+        .received = ota_writer_is_source(OTA_WRITER_WIRELESS) ? s_status.bytes_written : 0,
+        .rolling_crc32 = ota_writer_is_source(OTA_WRITER_WIRELESS) ? s_running_crc : 0,
         .payload_crc32 = dual_end_ota_crc32_update(0, received->payload, received->payload_len),
     };
     memcpy(packet.payload, &ack, sizeof(ack));
@@ -194,7 +194,7 @@ static esp_err_t send_wireless_ack(const dual_end_ota_packet_t *received,
 
 static bool packet_matches_session(const dual_end_ota_packet_t *packet)
 {
-    return s_status.active && s_wireless_session &&
+    return ota_writer_is_source(OTA_WRITER_WIRELESS) && s_status.active && s_wireless_session &&
         packet->session_id == s_status.session_id &&
         packet->target == s_status.target &&
         packet->image_size == s_status.image_size &&
@@ -210,23 +210,19 @@ static void process_wireless_packet(const dual_end_ota_packet_t *packet)
     case DUAL_END_OTA_MSG_BEGIN:
         if (packet->payload_len || packet->reserved > 2) {
             ret = ESP_ERR_INVALID_ARG;
-        } else if (s_status.active) {
+        } else if (dual_end_ota_get_status().active) {
             duplicate = packet_matches_session(packet) &&
                 (packet->reserved == 0 || (s_update_partition &&
                  strcmp(s_update_partition->label, partition_code_to_label(packet->reserved)) == 0));
             ret = duplicate ? ESP_OK : ESP_ERR_INVALID_STATE;
         } else {
-            /* Stop microphone/HID before erasing or writing flash. */
-            notify_ota_activity(true);
-            ret = dual_end_ota_self_begin_partition(DUAL_END_OTA_TARGET_SCEPTER,
+            ret = ota_writer_begin(OTA_WRITER_WIRELESS, DUAL_END_OTA_TARGET_SCEPTER,
                 packet->session_id, packet->image_size, packet->image_crc32,
                 partition_code_to_label(packet->reserved));
             if (ret == ESP_OK) {
                 s_wireless_session = true;
                 s_scepter_expected_sequence = 0;
                 s_have_last_data = false;
-            } else {
-                notify_ota_activity(false);
             }
         }
         break;
@@ -240,14 +236,14 @@ static void process_wireless_packet(const dual_end_ota_packet_t *packet)
                 ret = ESP_OK;
             } else if (packet->sequence == s_scepter_expected_sequence &&
                        packet->offset == s_status.bytes_written) {
-                ret = dual_end_ota_self_write(packet->payload, packet->payload_len);
+                ret = ota_writer_write(OTA_WRITER_WIRELESS, packet->payload, packet->payload_len);
                 if (ret == ESP_OK) {
                     s_last_data = *packet;
                     s_last_data_crc = crc;
                     s_have_last_data = true;
                     ++s_scepter_expected_sequence;
                 } else {
-                    dual_end_ota_self_abort();
+                    ota_writer_abort(OTA_WRITER_WIRELESS);
                 }
             } else {
                 ret = ESP_ERR_INVALID_RESPONSE;
@@ -258,13 +254,14 @@ static void process_wireless_packet(const dual_end_ota_packet_t *packet)
         if (packet_matches_session(packet) && packet->payload_len == 0 &&
             packet->sequence == s_scepter_expected_sequence &&
             packet->offset == s_status.bytes_written) {
-            ret = dual_end_ota_self_finish(false);
+            ret = ota_writer_finish(OTA_WRITER_WIRELESS, false);
             restart = ret == ESP_OK;
         }
         break;
     case DUAL_END_OTA_MSG_ABORT:
-        if (s_wireless_session && packet->session_id == s_status.session_id) {
-            dual_end_ota_self_abort();
+        if (ota_writer_is_source(OTA_WRITER_WIRELESS) && s_wireless_session &&
+            packet->session_id == s_status.session_id) {
+            ota_writer_abort(OTA_WRITER_WIRELESS);
             ret = ESP_OK;
         }
         break;
@@ -277,7 +274,8 @@ static void process_wireless_packet(const dual_end_ota_packet_t *packet)
             dual_end_ota_set_boot_partition_label(partition_code_to_label(packet->reserved)) : ESP_ERR_INVALID_ARG;
         break;
     case DUAL_END_OTA_MSG_REBOOT:
-        ret = s_status.active ? ESP_ERR_INVALID_STATE : ESP_OK;
+        /* Keep the writer reserved through ACK pacing and restart. */
+        ret = ota_writer_enter(OTA_WRITER_MAINTENANCE, true) ? ESP_OK : ESP_ERR_INVALID_STATE;
         restart = ret == ESP_OK;
         break;
     default:
@@ -353,10 +351,10 @@ static void wireless_ota_task(void *arg)
         if (xQueueReceive(s_wireless_queue, &packet, pdMS_TO_TICKS(500)) == pdTRUE) {
             process_wireless_packet(&packet);
         }
-        if (s_status.active && s_wireless_session &&
+        if (ota_writer_is_source(OTA_WRITER_WIRELESS) && s_status.active && s_wireless_session &&
             esp_timer_get_time() - s_wireless_activity_us > 60000000LL) {
             ESP_LOGW(TAG, "wireless OTA receive timed out; releasing paused audio");
-            dual_end_ota_self_abort();
+            ota_writer_abort(OTA_WRITER_WIRELESS);
         }
     }
 }

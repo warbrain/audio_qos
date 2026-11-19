@@ -244,16 +244,15 @@ static int s_config_lock,s_pipeline_lock;
 #define portEXIT_CRITICAL(p) ((void)(p),assert(locks==1),--locks)
 static int64_t esp_timer_get_time(void){return (int64_t)fixture_tick*1000+(int64_t)++cost_us;}
 static TickType_t xTaskGetTickCount(void){return fixture_tick;}
-static uint16_t s_config[13],s_requested_config[13];
+static uint16_t s_config[11],s_requested_config[11];
 static uint32_t s_config_generation,s_applied_generation;
 static uint8_t s_output_gain_x;
 static float s_runtime_hpf=MIC_HPF_ALPHA,s_hpf_previous_input[2],s_hpf_previous_output[2];
 static float s_fir_history[2][MIC_DECIMATOR_FIR_STORAGE],s_runtime_fir[MIC_DECIMATOR_FIR_TAPS];
 static size_t s_fir_write_index;
 static unsigned s_decimation_phase;
-static uint32_t s_soft_limited_frames,s_vad_hold_frames;
-static float s_soft_limit_min_gain=1.0f,s_vad_gain=1.0f;
-static bool s_vad_open=true;
+static uint32_t s_soft_limited_frames;
+static float s_soft_limit_min_gain=1.0f;
 static dual_end_spatial_t spatial;
 static dual_end_spatial_t *s_spatial=&spatial;
 static dual_end_spatial_stats_t s_spatial_status;
@@ -269,8 +268,8 @@ static uint64_t s_pipeline_last_overrun_us;
 static int s_frame_dispatch_task=1;
 static void *s_frame_user_ctx;
 static void callback(const int16_t *pcm,size_t count,
-    const dual_end_audio_analysis_metadata_t *analysis,void *ctx){
-    (void)pcm;(void)count;(void)analysis;(void)ctx;assert(false);
+    const dual_end_audio_analysis_metadata_t *analysis,int64_t captured_us,void *ctx){
+    (void)pcm;(void)count;(void)analysis;(void)captured_us;(void)ctx;assert(false);
 }
 static mic_audio_frame_cb_t s_frame_callback=callback;
 static dual_end_spatial_telemetry_t s_spatial_telemetry;
@@ -281,6 +280,7 @@ static mic_wiener_timing_histogram_t s_pipeline_wiener_histogram[2];
 typedef struct {mic_audio_stats_t stats;int64_t raw_sum_sq[2],pcm_sum_sq[2];uint32_t sequence;} mic_stats_snapshot_t;
 static mic_stats_snapshot_t s_stats_snapshot;
 static mic_output_health_t expected_groups[3],expected_interval;
+enum { QUIET_PACKET = 108, SILENT_PACKET = 109 };
 static void mic_pipeline_close_window(uint64_t now){
     (void)now;
     if(!s_pipeline_window_active)return;
@@ -338,6 +338,13 @@ static bool mic_frame_dispatch_publish(mic_audio_frame_cb_t frame_callback,void 
     assert(enqueued_us>=captured_us&&boot_id==7U&&capture_generation==1U&&
         dispatch_epoch==7U&&spatial_mode==0U);
     (void)spatial_generation;
+    if (queued_packets == QUIET_PACKET || queued_packets == SILENT_PACKET) {
+        const int16_t left = queued_packets == QUIET_PACKET ? 12 : 0;
+        const int16_t right = queued_packets == QUIET_PACKET ? -17 : 0;
+        for (unsigned frame = 0; frame < 320U; ++frame) {
+            assert(pcm[2U * frame] == left && pcm[2U * frame + 1U] == right);
+        }
+    }
     queue_oracle(&expected_groups[fixture_group],pcm);
     queue_oracle(&expected_interval,pcm);
     ++queued_packets;s_frame_dispatch_highwater=1U;return true;
@@ -347,7 +354,7 @@ static bool mic_frame_dispatch_publish(mic_audio_frame_cb_t frame_callback,void 
         code += "\nstatic uint32_t s_frame_dispatch_drops;\n"
     code += source[coeff_start:coeff_end]
     for name in ("abs_i16_to_i32", "clamp_i16_from_float", "mic_shared_soft_limit_gain", "mic_filter_and_decimate",
-                 "mic_vad_process", "mic_owner_apply_dsp_config", "mic_pipeline_record_block"):
+                 "mic_owner_apply_dsp_config", "mic_pipeline_record_block"):
         code += "\n" + implementation(name)
     code += r'''
 int main(void){
@@ -357,7 +364,7 @@ int main(void){
     int16_t pcm_storage[640],*pcm_buf=pcm_storage;
     const size_t input_frames=960,bytes_read=3840;
     unsigned stats_seen=0;
-    const uint16_t fixture_config[13]={1,0,1,1,0,80,0,7000,1,20000,26000,48,300};
+    const uint16_t fixture_config[11]={1,0,1,1,0,80,0,7000,1,20000,26000};
     memcpy(s_requested_config,fixture_config,sizeof(fixture_config));s_config_generation=1;
 ''' + locals_source + r'''
     for(unsigned iteration=0;iteration<110U;++iteration){
@@ -372,8 +379,13 @@ int main(void){
         storage.captured_us=storage.enqueued_us=dequeued_us-100U;
         ++storage.sequence;
         for(unsigned frame=0;frame<960U;++frame){
-            raw_buf[2U*frame]=(int16_t)(frame%2U?10000:-10000);
-            raw_buf[2U*frame+1U]=(int16_t)(frame%2U?-4000:4000);
+            if (iteration == QUIET_PACKET || iteration == SILENT_PACKET) {
+                raw_buf[2U * frame] = iteration == QUIET_PACKET ? 12 : 0;
+                raw_buf[2U * frame + 1U] = iteration == QUIET_PACKET ? -17 : 0;
+            } else {
+                raw_buf[2U*frame]=(int16_t)(frame%2U?10000:-10000);
+                raw_buf[2U*frame+1U]=(int16_t)(frame%2U?-4000:4000);
+            }
         }
 ''' + processing + r'''
         assert(queued_packets==iteration+1U && !locks && pcm_frames==0U);

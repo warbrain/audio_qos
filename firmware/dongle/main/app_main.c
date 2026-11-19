@@ -82,6 +82,15 @@ static const remote_button_mapping_t s_default_button_map[REMOTE_BUTTON_COUNT] =
     /* C is the fixed mouse wheel + middle-button composite input. */
     [REMOTE_BUTTON_ID_C] = {.modifier = 0, .keycode = {0}},
 };
+/* Guards s_button_map and the held/released button state below. The HID
+ * config worker mutates the mapping while the audio RX task is decoding an
+ * input packet, so both sides must take this lock. */
+static SemaphoreHandle_t s_input_state_lock;
+/* Recursive because the config path calls helpers that lock as well. The NULL
+ * checks keep early-boot callers safe before app_main creates the mutex. */
+#define INPUT_STATE_LOCK()   do { if (s_input_state_lock) xSemaphoreTakeRecursive(s_input_state_lock, portMAX_DELAY); } while (0)
+#define INPUT_STATE_UNLOCK() do { if (s_input_state_lock) xSemaphoreGiveRecursive(s_input_state_lock); } while (0)
+
 static remote_button_mapping_t s_button_map[REMOTE_BUTTON_COUNT];
 static bool s_button_pressed[REMOTE_BUTTON_COUNT];
 static uint8_t s_last_key_state;
@@ -146,7 +155,10 @@ static esp_err_t button_mapping_save(void)
         .magic = BUTTON_MAPPING_STORE_MAGIC,
         .version = BUTTON_MAPPING_STORE_VER,
     };
+    /* Snapshot under the input lock; never hold it across flash operations. */
+    INPUT_STATE_LOCK();
     memcpy(store.mapping, s_button_map, sizeof(store.mapping));
+    INPUT_STATE_UNLOCK();
 
     esp_err_t ret = nvs_open("hid_cfg", NVS_READWRITE, &handle);
     if (ret != ESP_OK) {
@@ -241,9 +253,11 @@ static void send_mapped_button_state(uint8_t button_id, bool pressed)
 
 static void release_all_mapped_buttons(void)
 {
+    INPUT_STATE_LOCK();
     memset(s_button_pressed, 0, sizeof(s_button_pressed));
     dongle_hid_keyboard_report_t report = {0};
     ESP_ERROR_CHECK_WITHOUT_ABORT(dongle_usb_device_send_keyboard_report(&report));
+    INPUT_STATE_UNLOCK();
 }
 
 static void reset_key_input_tracking(void)
@@ -264,15 +278,19 @@ static bool button_mapping_is_empty(uint8_t button_id)
         return true;
     }
 
+    INPUT_STATE_LOCK();
     const remote_button_mapping_t *mapping = &s_button_map[button_id];
     if (mapping->modifier != 0) {
+        INPUT_STATE_UNLOCK();
         return false;
     }
     for (size_t i = 0; i < sizeof(mapping->keycode); i++) {
         if (mapping->keycode[i] != 0) {
+            INPUT_STATE_UNLOCK();
             return false;
         }
     }
+    INPUT_STATE_UNLOCK();
     return true;
 }
 
@@ -310,6 +328,7 @@ static void send_wheel_button_tap(void)
 
 static void reset_wheel_button_tracking(void)
 {
+    INPUT_STATE_LOCK();
     if (s_last_hid_wheel_button_state_valid &&
         s_last_hid_wheel_button_pressed) {
         send_wheel_button_state(false);
@@ -318,6 +337,7 @@ static void reset_wheel_button_tracking(void)
     }
     s_last_hid_wheel_button_state_valid = false;
     s_last_hid_wheel_button_pressed = false;
+    INPUT_STATE_UNLOCK();
 }
 
 static void process_key_input(const dual_end_hid_input_payload_t *payload)
@@ -426,6 +446,9 @@ static void process_hid_input_payload(const dual_end_hid_input_payload_t *payloa
         return;
     }
 
+    /* Serialize the complete state transition with mapping and link resets.
+     * USB report enqueueing is bounded; NVS/control waits stay outside this lock. */
+    INPUT_STATE_LOCK();
     process_key_input(payload);
 
     if (payload->flags & DUAL_END_HID_FLAG_ZOOM_IN) {
@@ -533,6 +556,7 @@ static void process_hid_input_payload(const dual_end_hid_input_payload_t *payloa
             send_wheel_button_tap();
         }
     }
+    INPUT_STATE_UNLOCK();
 }
 
 
@@ -687,7 +711,10 @@ static esp_err_t dongle_dsp_request(const uint8_t *data) {
     return ret;
 }
 
-static esp_err_t dongle_hid_config_report_cb(uint8_t report_id,
+/* Executes one HID config command. Runs on the config worker task, never in
+ * the TinyUSB task: this body writes NVS and waits on ESP-NOW control replies,
+ * and the USB task must keep servicing UAC audio every 1 ms. */
+static esp_err_t dongle_hid_config_execute(uint8_t report_id,
                                              uint8_t report_type,
                                              const uint8_t *buffer,
                                              uint16_t bufsize,
@@ -715,40 +742,29 @@ static esp_err_t dongle_hid_config_report_cb(uint8_t report_id,
             ESP_LOGW(TAG, "HID config invalid button id=%u", (unsigned)button_id);
             return ESP_ERR_INVALID_ARG;
         }
-        remote_button_mapping_t mapping = {
+        const remote_button_mapping_t mapping = {
             .modifier = buffer[2],
-            .keycode = {
-                buffer[3],
-                buffer[4],
-                buffer[5],
-                buffer[6],
-                buffer[7],
-                buffer[8],
-            },
+            .keycode = {buffer[3], buffer[4], buffer[5],
+                        buffer[6], buffer[7], buffer[8]},
         };
-
+        INPUT_STATE_LOCK();
         reset_wheel_button_tracking();
         release_all_mapped_buttons();
         s_button_map[button_id] = mapping;
+        INPUT_STATE_UNLOCK();
         esp_err_t ret = button_mapping_save();
-        ESP_LOGI(TAG,
-                 "HID config: button %s modifier=0x%02x keys=%u,%u,%u,%u,%u,%u save=%s",
-                 remote_button_name(button_id),
-                 mapping.modifier,
-                 mapping.keycode[0],
-                 mapping.keycode[1],
-                 mapping.keycode[2],
-                 mapping.keycode[3],
-                 mapping.keycode[4],
-                 mapping.keycode[5],
+        ESP_LOGI(TAG, "HID config: button %s modifier=0x%02x save=%s",
+                 remote_button_name(button_id), (unsigned)mapping.modifier,
                  esp_err_to_name(ret));
         return ret;
     }
 
     case DONGLE_HID_CONFIG_CMD_RESET: {
+        INPUT_STATE_LOCK();
         reset_wheel_button_tracking();
         release_all_mapped_buttons();
         button_mapping_set_defaults();
+        INPUT_STATE_UNLOCK();
         esp_err_t ret = button_mapping_save();
         ESP_LOGI(TAG, "HID config: reset defaults save=%s", esp_err_to_name(ret));
         return ret;
@@ -769,6 +785,87 @@ static esp_err_t dongle_hid_config_report_cb(uint8_t report_id,
         return ESP_ERR_NOT_SUPPORTED;
     }
 }
+#define DONGLE_HID_CONFIG_QUEUE_LEN 4
+
+static QueueHandle_t s_hid_config_queue;
+
+/* Runs HID config commands off the TinyUSB task. */
+static void dongle_hid_config_worker(void *pvParameters)
+{
+    (void)pvParameters;
+    uint8_t buffer[DONGLE_HID_CONFIG_REPORT_SIZE];
+    for (;;) {
+        if (xQueueReceive(s_hid_config_queue, buffer, portMAX_DELAY) != pdTRUE) {
+            continue;
+        }
+        (void)dongle_hid_config_execute(DONGLE_HID_REPORT_ID_CONFIG,
+                                        DONGLE_HID_REPORT_TYPE_OUTPUT,
+                                        buffer,
+                                        (uint16_t)sizeof(buffer),
+                                        NULL);
+    }
+}
+
+static esp_err_t dongle_hid_config_worker_start(void)
+{
+    if (s_hid_config_queue == NULL) {
+        s_hid_config_queue = xQueueCreate(DONGLE_HID_CONFIG_QUEUE_LEN,
+                                          DONGLE_HID_CONFIG_REPORT_SIZE);
+        if (s_hid_config_queue == NULL) {
+            ESP_LOGE(TAG, "HID config queue allocation failed");
+            return ESP_ERR_NO_MEM;
+        }
+    }
+    if (xTaskCreate(dongle_hid_config_worker, "hid_cfg", 4096, NULL, 4, NULL) != pdPASS) {
+        ESP_LOGE(TAG, "HID config worker task creation failed");
+        return ESP_ERR_NO_MEM;
+    }
+    return ESP_OK;
+}
+
+/* TinyUSB set-report callback: only validates and enqueues. Blocking work
+ * (NVS write, ESP-NOW round trip) must not run here, or UAC audio stalls. */
+static esp_err_t dongle_hid_config_report_cb(uint8_t report_id,
+                                             uint8_t report_type,
+                                             const uint8_t *buffer,
+                                             uint16_t bufsize,
+                                             void *ctx)
+{
+    (void)ctx;
+    if (report_id != DONGLE_HID_REPORT_ID_CONFIG ||
+        (report_type != DONGLE_HID_REPORT_TYPE_OUTPUT &&
+         report_type != DONGLE_HID_REPORT_TYPE_FEATURE)) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    if (!buffer || bufsize < DONGLE_HID_CONFIG_REPORT_SIZE) {
+        ESP_LOGW(TAG, "HID config report too short: %u", (unsigned)bufsize);
+        return ESP_ERR_INVALID_SIZE;
+    }
+    if (s_hid_config_queue == NULL) {
+        return ESP_ERR_INVALID_STATE;
+    }
+    /* TinyUSB on this port dispatches endpoint callbacks from the USB ISR chain
+     * (see audiod_xfer_isr), while tud_task runs separately. The same HID
+     * set-report path can therefore be reached in either context, so pick the
+     * matching FreeRTOS API instead of assuming a task context. */
+    BaseType_t queued;
+    if (xPortInIsrContext()) {
+        BaseType_t woken = pdFALSE;
+        queued = xQueueSendFromISR(s_hid_config_queue, buffer, &woken);
+        if (woken == pdTRUE) {
+            portYIELD_FROM_ISR();
+        }
+    } else {
+        queued = xQueueSend(s_hid_config_queue, buffer, 0);
+    }
+    if (queued != pdTRUE) {
+        ESP_LOGW(TAG, "HID config queue full; command dropped cmd=%u",
+                 (unsigned)buffer[0]);
+        return ESP_ERR_TIMEOUT;
+    }
+    return ESP_OK;
+}
+
 static void dongle_input_event_sink(const dual_end_hid_input_payload_t *payload,
                                     uint32_t sequence,
                                     int rssi,
@@ -798,10 +895,12 @@ static void dongle_link_status_cb(bool connected, int rssi, void *ctx)
     const bool was_connected = dongle_link_status_update(connected, rssi);
     if (!connected && was_connected) {
         dongle_audio_session_reset_cb(NULL);
+        INPUT_STATE_LOCK();
         reset_wheel_button_tracking();
         release_all_mapped_buttons();
         reset_key_input_tracking();
         reset_pointer_input_tracking();
+        INPUT_STATE_UNLOCK();
     }
 }
 static void dongle_ota_activity_cb(bool active, void *ctx)
@@ -858,6 +957,9 @@ void app_main(void)
     ESP_ERROR_CHECK(dual_end_pairing_service_init(role, false));
     button_mapping_load();
     ESP_ERROR_CHECK(dongle_uac_bridge_start());
+    s_input_state_lock = xSemaphoreCreateRecursiveMutex();
+    ESP_ERROR_CHECK(s_input_state_lock ? ESP_OK : ESP_ERR_NO_MEM);
+    ESP_ERROR_CHECK(dongle_hid_config_worker_start());
     dongle_usb_device_set_hid_config_report_cb(dongle_hid_config_report_cb, NULL);
     dongle_usb_device_set_diagnostics_command_cb(dongle_diagnostics_handle_command, NULL);
     ESP_ERROR_CHECK(dongle_usb_device_start());

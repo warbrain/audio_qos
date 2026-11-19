@@ -379,15 +379,16 @@ def test_sender_radio_submit_failure_is_not_reported_as_pipeline_success(tmp_pat
         encoding="utf-8"
     )
     definition = sender.index(
-        "esp_err_t dual_end_audio_sender_send_pcm_with_hardware_and_analysis("
+        "esp_err_t dual_end_audio_sender_send_pcm_with_hardware_and_analysis_at("
     )
     send = function(
-        sender[definition:], "dual_end_audio_sender_send_pcm_with_hardware_and_analysis"
+        sender[definition:], "dual_end_audio_sender_send_pcm_with_hardware_and_analysis_at"
     )
     take = function(sender, "dual_end_audio_sender_take_owner_timing")
     assert "dual_end_espnow_link_send_audio_at" in send
     assert "if (ret != ESP_OK)" in send
     assert "s_encode_attempt_success=false;" in send
-    assert "s_encode_attempt_outcome=DUAL_END_OUTCOME_OPERATION_FAILED;" in send
+    assert "radio_within_budget ? DUAL_END_OUTCOME_OPERATION_FAILED" in send
+    assert "DUAL_END_OUTCOME_DEADLINE" in send
     assert "timing->outcome=sender_current_owner_outcome();" in take
     assert "s_encode_attempt_pending=false;" in take

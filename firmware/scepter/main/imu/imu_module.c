@@ -777,7 +777,12 @@ static esp_err_t imu_add_device(uint8_t address)
 
 static void imu_recover_i2c_after_read_error(esp_err_t err, uint32_t fail_count)
 {
-    if (err != ESP_ERR_TIMEOUT && err != ESP_ERR_INVALID_STATE) {
+    /* ESP-IDF 6.x reports a NACK as ESP_ERR_INVALID_RESPONSE
+     * (esp_driver_i2c/i2c_master.c), which 5.5 returned as ESP_ERR_TIMEOUT.
+     * A sensor that is NACKing must also trigger the bus reset, otherwise the
+     * bus can stay wedged and every later read fails the same way. */
+    if (err != ESP_ERR_TIMEOUT && err != ESP_ERR_INVALID_STATE &&
+        err != ESP_ERR_INVALID_RESPONSE) {
         return;
     }
 

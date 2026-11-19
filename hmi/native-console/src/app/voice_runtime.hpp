@@ -32,6 +32,10 @@ struct VoiceOptions
     int asr_max_new_tokens = 0;
     bool vad_enabled = true;
     bool denoise_enabled = false;
+    // Host input enhancement on the fused mono stream: off, standard, strong.
+    // The shipping client applies the same AGC because the firmware ships a
+    // fixed 1.0x gain.
+    std::string capture_agc = "standard";
     // Default off: on 20 mm 16 kHz input the released masking_on_noisy model
     // raised CER by 12.6 pp (see tools/se/RESULTS-hgtcrn.md in the firmware
     // handoff). Re-enable only after real-device paired CER shows a win.

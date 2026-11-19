@@ -740,7 +740,13 @@ static void audio_recv_cb(const uint8_t *src_addr, const uint8_t *data,
             ++s_invalid_frames;
             return;
         }
-        begin_audio_session(&session, now_us);
+        /* The session boundary must be the packet's ARRIVAL time, because audio
+         * frames are validated against started_us with their own arrival time
+         * (see the received_us check further down). Using the task processing
+         * time would put the boundary slightly after the radio arrival of a
+         * BEGIN that queued behind other work, so a legal first audio packet
+         * could be rejected as "arrived before the session started". */
+        begin_audio_session(&session, received_us > 0 ? received_us : now_us);
         return;
     }
 

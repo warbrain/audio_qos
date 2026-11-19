@@ -1,0 +1,1178 @@
+[
+ {
+  "id": "S0094_M-0094-2_056604-057232",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0094\\S0094_M-0094-2_056604-057232.wav",
+  "reference": "冬天的早晨空气中弥漫着雪的清新令人神清气爽",
+  "speaker": "S0094"
+ },
+ {
+  "id": "S0212_M-0212-2_095528-095992",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0212\\S0212_M-0212-2_095528-095992.wav",
+  "reference": "雨后的空气清新如洗带来了大自然最真实的气息",
+  "speaker": "S0212"
+ },
+ {
+  "id": "S0090_M-0090-2_068304-068772",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0090\\S0090_M-0090-2_068304-068772.wav",
+  "reference": "明亮的教室里孩子们专心听讲充满求知的热情",
+  "speaker": "S0090"
+ },
+ {
+  "id": "S0092_M-0092-2_045868-046308",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0092\\S0092_M-0092-2_045868-046308.wav",
+  "reference": "每一篇日记都记录着我的欢笑与泪水倍感珍贵",
+  "speaker": "S0092"
+ },
+ {
+  "id": "S0091_M-0091-2_006648-007124",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0091\\S0091_M-0091-2_006648-007124.wav",
+  "reference": "在万物复苏的春天心中总是充满无限憧憬",
+  "speaker": "S0091"
+ },
+ {
+  "id": "S0069_M-0069-2_114272-114848",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0069\\S0069_M-0069-2_114272-114848.wav",
+  "reference": "每当我品味一杯香浓的咖啡心中便会涌起思念",
+  "speaker": "S0069"
+ },
+ {
+  "id": "S0208_M-0208-2_054452-054892",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0208\\S0208_M-0208-2_054452-054892.wav",
+  "reference": "看海时的那一刻觉得自己是多么渺小而又自由",
+  "speaker": "S0208"
+ },
+ {
+  "id": "S0191_M-0191-2_059540-060048",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0191\\S0191_M-0191-2_059540-060048.wav",
+  "reference": "天空中的白云悠然自得让我在繁忙中也能感受到放松",
+  "speaker": "S0191"
+ },
+ {
+  "id": "S0166_M-0166-2_099300-099860",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0166\\S0166_M-0166-2_099300-099860.wav",
+  "reference": "听到那首熟悉的歌记忆涌现瞬间温暖心房",
+  "speaker": "S0166"
+ },
+ {
+  "id": "S0190_M-0190-2_021816-022336",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0190\\S0190_M-0190-2_021816-022336.wav",
+  "reference": "春天的花朵竞相开放空气中弥漫着淡淡的花香",
+  "speaker": "S0190"
+ },
+ {
+  "id": "S0055_M-0055-2_058184-058704",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0055\\S0055_M-0055-2_058184-058704.wav",
+  "reference": "在书架上发现一本久违的书仿佛和久别的朋友重逢",
+  "speaker": "S0055"
+ },
+ {
+  "id": "S0067_M-0067-2_010544-011056",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0067\\S0067_M-0067-2_010544-011056.wav",
+  "reference": "向过去的自己致敬勇敢走出舒适区迎接新挑战",
+  "speaker": "S0067"
+ },
+ {
+  "id": "S0095_M-0095-2_039788-040280",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0095\\S0095_M-0095-2_039788-040280.wav",
+  "reference": "听见风的声音仿佛是大自然的低语诉说着万物的奥秘",
+  "speaker": "S0095"
+ },
+ {
+  "id": "S0114_M-0114-2_004072-004680",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0114\\S0114_M-0114-2_004072-004680.wav",
+  "reference": "透过窗户望去城市的繁忙依旧充满生机与活力",
+  "speaker": "S0114"
+ },
+ {
+  "id": "S0065_M-0065-2_013612-014320",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0065\\S0065_M-0065-2_013612-014320.wav",
+  "reference": "老屋前的藤蔓在绿意中肆意生长岁月的痕迹在每一个角落默默留下印记",
+  "speaker": "S0065"
+ },
+ {
+  "id": "S0163_M-0163-2_012420-013192",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0163\\S0163_M-0163-2_012420-013192.wav",
+  "reference": "记忆的河流中总有一段美好是不朽的温暖心灵",
+  "speaker": "S0163"
+ },
+ {
+  "id": "S0057_M-0057-2_054052-054632",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0057\\S0057_M-0057-2_054052-054632.wav",
+  "reference": "凉爽的秋风轻拂迎来了一年的丰收与喜悦心中感恩",
+  "speaker": "S0057"
+ },
+ {
+  "id": "S0094_M-0094-2_077000-077568",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0094\\S0094_M-0094-2_077000-077568.wav",
+  "reference": "在溪边垂钓听时间的流逝内心变得格外宁静",
+  "speaker": "S0094"
+ },
+ {
+  "id": "S0212_M-0212-2_101176-101572",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0212\\S0212_M-0212-2_101176-101572.wav",
+  "reference": "在阳光灿烂的日子心情如花般绽放",
+  "speaker": "S0212"
+ },
+ {
+  "id": "S0090_M-0090-2_039720-040232",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0090\\S0090_M-0090-2_039720-040232.wav",
+  "reference": "小镇的清晨雾气萦绕仿佛在讲述一个隐秘的故事",
+  "speaker": "S0090"
+ },
+ {
+  "id": "S0164_M-0164-2_064896-065348",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0164\\S0164_M-0164-2_064896-065348.wav",
+  "reference": "每一次成功都来之不易只有付出才能收获",
+  "speaker": "S0164"
+ },
+ {
+  "id": "S0092_M-0092-2_026468-026968",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0092\\S0092_M-0092-2_026468-026968.wav",
+  "reference": "历史的老宅见证了岁月的流逝每一处墙壁都藏着故事",
+  "speaker": "S0092"
+ },
+ {
+  "id": "S0091_M-0091-2_012640-013088",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0091\\S0091_M-0091-2_012640-013088.wav",
+  "reference": "繁华的城市中有无数故事正悄悄发生",
+  "speaker": "S0091"
+ },
+ {
+  "id": "S0069_M-0069-2_049836-050588",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0069\\S0069_M-0069-2_049836-050588.wav",
+  "reference": "雨后的城市总是透着一股清新仿佛洗涤了心灵的尘埃与烦扰",
+  "speaker": "S0069"
+ },
+ {
+  "id": "S0208_M-0208-2_011660-012184",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0208\\S0208_M-0208-2_011660-012184.wav",
+  "reference": "旅行的意义在于体验而不仅仅是到某地去某地",
+  "speaker": "S0208"
+ },
+ {
+  "id": "S0166_M-0166-2_033172-033748",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0166\\S0166_M-0166-2_033172-033748.wav",
+  "reference": "琼瑶的山水画中似乎隐藏着一个个动人的爱情故事",
+  "speaker": "S0166"
+ },
+ {
+  "id": "S0190_M-0190-2_023496-023872",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0190\\S0190_M-0190-2_023496-023872.wav",
+  "reference": "雨后的空气格外清新让人倍感惬意",
+  "speaker": "S0190"
+ },
+ {
+  "id": "S0055_M-0055-2_047132-047836",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0055\\S0055_M-0055-2_047132-047836.wav",
+  "reference": "在山顶俯瞰下面的世界心中充满自豪感似乎一切都在掌握之中",
+  "speaker": "S0055"
+ },
+ {
+  "id": "S0202_M-0202-2_072008-072416",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0202\\S0202_M-0202-2_072008-072416.wav",
+  "reference": "每一段记忆都是一枚印章刻在我们心灵深处",
+  "speaker": "S0202"
+ },
+ {
+  "id": "S0095_M-0095-2_082032-082524",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0095\\S0095_M-0095-2_082032-082524.wav",
+  "reference": "春天的阳光透过窗户洒在书桌上温暖而明亮",
+  "speaker": "S0095"
+ },
+ {
+  "id": "S0054_M-0054-2_047540-047984",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0054\\S0054_M-0054-2_047540-047984.wav",
+  "reference": "生命如歌每个音符都记录着各自的故事",
+  "speaker": "S0054"
+ },
+ {
+  "id": "S0053_M-0053-2_040280-040756",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0053\\S0053_M-0053-2_040280-040756.wav",
+  "reference": "藏在心底的秘密让我在夜深人静默默思念",
+  "speaker": "S0053"
+ },
+ {
+  "id": "S0115_M-0115-2_036052-036472",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0115\\S0115_M-0115-2_036052-036472.wav",
+  "reference": "我喜欢独自散步享受那份宁静与内心的平和",
+  "speaker": "S0115"
+ },
+ {
+  "id": "S0114_M-0114-2_083816-084268",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0114\\S0114_M-0114-2_083816-084268.wav",
+  "reference": "炊烟袅袅升起人们的生活充满了温馨与安宁",
+  "speaker": "S0114"
+ },
+ {
+  "id": "S0193_M-0193-2_006604-007112",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0193\\S0193_M-0193-2_006604-007112.wav",
+  "reference": "走进山林感受自然的气息心灵得到纯粹的宁静",
+  "speaker": "S0193"
+ },
+ {
+  "id": "S0065_M-0065-2_100648-101184",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0065\\S0065_M-0065-2_100648-101184.wav",
+  "reference": "午后的阳光透过树叶形成了斑驳的光影美得不可思议",
+  "speaker": "S0065"
+ },
+ {
+  "id": "S0163_M-0163-2_102304-103000",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0163\\S0163_M-0163-2_102304-103000.wav",
+  "reference": "手中的画笔让我在纸上描绘出心中理想的世界",
+  "speaker": "S0163"
+ },
+ {
+  "id": "S0213_M-0213-2_054848-055540",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0213\\S0213_M-0213-2_054848-055540.wav",
+  "reference": "节日的灯火璀璨街道上的人们的笑脸焕发着活力",
+  "speaker": "S0213"
+ },
+ {
+  "id": "S0094_M-0094-2_022392-022984",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0094\\S0094_M-0094-2_022392-022984.wav",
+  "reference": "书中自有颜如玉每一次阅读都是对心灵的洗礼",
+  "speaker": "S0094"
+ },
+ {
+  "id": "S0063_M-0063-2_047108-047804",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0063\\S0063_M-0063-2_047108-047804.wav",
+  "reference": "在深秋的傍晚坐在咖啡馆里享受属于自己的宁静时光",
+  "speaker": "S0063"
+ },
+ {
+  "id": "S0090_M-0090-2_061920-062240",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0090\\S0090_M-0090-2_061920-062240.wav",
+  "reference": "一本好书能让我穿越到另一个世界",
+  "speaker": "S0090"
+ },
+ {
+  "id": "S0207_M-0207-2_051852-052396",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0207\\S0207_M-0207-2_051852-052396.wav",
+  "reference": "在图书馆的一排书架前仿佛置身于知识的海洋",
+  "speaker": "S0207"
+ },
+ {
+  "id": "S0092_M-0092-2_059588-060032",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0092\\S0092_M-0092-2_059588-060032.wav",
+  "reference": "在阳光明媚的日子里带着相机记录下美好的生活",
+  "speaker": "S0092"
+ },
+ {
+  "id": "S0091_M-0091-2_077120-077656",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0091\\S0091_M-0091-2_077120-077656.wav",
+  "reference": "在阳光下打盹任思绪随风飘荡无拘无束",
+  "speaker": "S0091"
+ },
+ {
+  "id": "S0208_M-0208-2_001368-001900",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0208\\S0208_M-0208-2_001368-001900.wav",
+  "reference": "一次次的尝试和挫折终将为我铺就成功的道路",
+  "speaker": "S0208"
+ },
+ {
+  "id": "S0191_M-0191-2_068724-069260",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0191\\S0191_M-0191-2_068724-069260.wav",
+  "reference": "每一次的新尝试都让我更加了解自己丰富了我的人生经历",
+  "speaker": "S0191"
+ },
+ {
+  "id": "S0166_M-0166-2_006216-006720",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0166\\S0166_M-0166-2_006216-006720.wav",
+  "reference": "生活的每一步都是成长让我更加懂得珍惜眼前",
+  "speaker": "S0166"
+ },
+ {
+  "id": "S0190_M-0190-2_013816-014340",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0190\\S0190_M-0190-2_013816-014340.wav",
+  "reference": "有些话尽管再美丽却也难以表达那份真实的情感",
+  "speaker": "S0190"
+ },
+ {
+  "id": "S0055_M-0055-2_040540-041032",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0055\\S0055_M-0055-2_040540-041032.wav",
+  "reference": "生活的每一天都是一幅未完成的画卷期待着我的描绘",
+  "speaker": "S0055"
+ },
+ {
+  "id": "S0067_M-0067-2_019676-020236",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0067\\S0067_M-0067-2_019676-020236.wav",
+  "reference": "秋日的阳光洒落在大地柔和而温暖都是生命又一次馈赠",
+  "speaker": "S0067"
+ },
+ {
+  "id": "S0095_M-0095-2_080536-081032",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0095\\S0095_M-0095-2_080536-081032.wav",
+  "reference": "风雨过后总会见到彩虹生命的希望从不缺席",
+  "speaker": "S0095"
+ },
+ {
+  "id": "S0115_M-0115-2_056744-057176",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0115\\S0115_M-0115-2_056744-057176.wav",
+  "reference": "走在乡间小路迎面而来的新鲜空气令人陶醉",
+  "speaker": "S0115"
+ },
+ {
+  "id": "S0114_M-0114-2_060772-061288",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0114\\S0114_M-0114-2_060772-061288.wav",
+  "reference": "偶尔的孤独也是探索自我的一种方式值得珍惜",
+  "speaker": "S0114"
+ },
+ {
+  "id": "S0065_M-0065-2_028224-028684",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0065\\S0065_M-0065-2_028224-028684.wav",
+  "reference": "美好的时光总是短暂留下一串串动人的回忆",
+  "speaker": "S0065"
+ },
+ {
+  "id": "S0163_M-0163-2_104184-104992",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0163\\S0163_M-0163-2_104184-104992.wav",
+  "reference": "月光洒在湖面上波光粼粼如同无数颗闪烁的宝石",
+  "speaker": "S0163"
+ },
+ {
+  "id": "S0046_M-0046-2_053312-053844",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0046\\S0046_M-0046-2_053312-053844.wav",
+  "reference": "记忆中的笑脸时刻提醒着我生活的美好与真挚",
+  "speaker": "S0046"
+ },
+ {
+  "id": "S0094_M-0094-2_031552-032092",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0094\\S0094_M-0094-2_031552-032092.wav",
+  "reference": "在月光下漫步心灵的宁静让烦恼渐渐远去",
+  "speaker": "S0094"
+ },
+ {
+  "id": "S0063_M-0063-2_022408-022868",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0063\\S0063_M-0063-2_022408-022868.wav",
+  "reference": "书中自有黄金屋知识是我追求的宝藏",
+  "speaker": "S0063"
+ },
+ {
+  "id": "S0192_M-0192-2_008896-009468",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0192\\S0192_M-0192-2_008896-009468.wav",
+  "reference": "月光洒在湖面波光粼粼宛如碎银闪烁",
+  "speaker": "S0192"
+ },
+ {
+  "id": "S0164_M-0164-2_069728-070308",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0164\\S0164_M-0164-2_069728-070308.wav",
+  "reference": "在书桌旁埋头学习梦想的种子在心中悄然发芽",
+  "speaker": "S0164"
+ },
+ {
+  "id": "S0092_M-0092-2_023232-023680",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0092\\S0092_M-0092-2_023232-023680.wav",
+  "reference": "时光总在不经意间流逝却给我们留下了珍贵的回忆",
+  "speaker": "S0092"
+ },
+ {
+  "id": "S0165_M-0165-2_101932-102444",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0165\\S0165_M-0165-2_101932-102444.wav",
+  "reference": "清晨的阳光透过树叶洒在地面上梦幻般美丽",
+  "speaker": "S0165"
+ },
+ {
+  "id": "S0091_M-0091-2_086380-086956",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0091\\S0091_M-0091-2_086380-086956.wav",
+  "reference": "在小溪边静坐感受水流的韵律与大自然的和谐",
+  "speaker": "S0091"
+ },
+ {
+  "id": "S0069_M-0069-2_085580-086188",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0069\\S0069_M-0069-2_085580-086188.wav",
+  "reference": "品尝一杯香浓的热巧克力仿佛温暖了整个冬季的寒意",
+  "speaker": "S0069"
+ },
+ {
+  "id": "S0208_M-0208-2_081180-081740",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0208\\S0208_M-0208-2_081180-081740.wav",
+  "reference": "他们相约一起骑自行车享受着自由与快乐的时光",
+  "speaker": "S0208"
+ },
+ {
+  "id": "S0191_M-0191-2_014224-014704",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0191\\S0191_M-0191-2_014224-014704.wav",
+  "reference": "与自然亲密接触感受到生命的脉动心灵得到滋养",
+  "speaker": "S0191"
+ },
+ {
+  "id": "S0166_M-0166-2_074592-075132",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0166\\S0166_M-0166-2_074592-075132.wav",
+  "reference": "每一次跌倒都是机会让我们学会重新站起",
+  "speaker": "S0166"
+ },
+ {
+  "id": "S0055_M-0055-2_003856-004408",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0055\\S0055_M-0055-2_003856-004408.wav",
+  "reference": "悠扬的琴声飘荡在空中似乎在诉说着无尽的思念",
+  "speaker": "S0055"
+ },
+ {
+  "id": "S0067_M-0067-2_042576-043040",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0067\\S0067_M-0067-2_042576-043040.wav",
+  "reference": "清澈的湖水映出蓝天白云宛如一幅美丽的画卷",
+  "speaker": "S0067"
+ },
+ {
+  "id": "S0095_M-0095-2_065392-065800",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0095\\S0095_M-0095-2_065392-065800.wav",
+  "reference": "在书的海洋中遨游每一页都记载着智慧",
+  "speaker": "S0095"
+ },
+ {
+  "id": "S0053_M-0053-2_059424-059936",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0053\\S0053_M-0053-2_059424-059936.wav",
+  "reference": "幽静的山谷里回音传来似乎在呼唤我的名字",
+  "speaker": "S0053"
+ },
+ {
+  "id": "S0115_M-0115-2_063604-064056",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0115\\S0115_M-0115-2_063604-064056.wav",
+  "reference": "在白雪皑皑的日子里静静坐下享受冬日的宁静",
+  "speaker": "S0115"
+ },
+ {
+  "id": "S0114_M-0114-2_004896-005492",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0114\\S0114_M-0114-2_004896-005492.wav",
+  "reference": "追逐梦想的路上总会遇到风雨但这是成长的一部分",
+  "speaker": "S0114"
+ },
+ {
+  "id": "S0193_M-0193-2_045740-046292",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0193\\S0193_M-0193-2_045740-046292.wav",
+  "reference": "面对挑战时不妨微笑着迎接因为坚持就是胜利",
+  "speaker": "S0193"
+ },
+ {
+  "id": "S0065_M-0065-2_072440-072932",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0065\\S0065_M-0065-2_072440-072932.wav",
+  "reference": "音乐有着治愈心灵的力量让我在疲惫时感到放松",
+  "speaker": "S0065"
+ },
+ {
+  "id": "S0163_M-0163-2_101324-101988",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0163\\S0163_M-0163-2_101324-101988.wav",
+  "reference": "柔和的音乐响起让人忘却烦恼心随之平静",
+  "speaker": "S0163"
+ },
+ {
+  "id": "S0057_M-0057-2_080040-080452",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0057\\S0057_M-0057-2_080040-080452.wav",
+  "reference": "在每一场相逢里总有不期而遇的温柔陪伴",
+  "speaker": "S0057"
+ },
+ {
+  "id": "S0213_M-0213-2_035104-035484",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0213\\S0213_M-0213-2_035104-035484.wav",
+  "reference": "大地披上白雪银装素裹分外妖娆",
+  "speaker": "S0213"
+ },
+ {
+  "id": "S0063_M-0063-2_088292-088784",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0063\\S0063_M-0063-2_088292-088784.wav",
+  "reference": "开车在乡间小路上感受风在车窗外呼啸",
+  "speaker": "S0063"
+ },
+ {
+  "id": "S0164_M-0164-2_041644-042188",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0164\\S0164_M-0164-2_041644-042188.wav",
+  "reference": "友谊如同一棵树需要时光滋润才能枝繁叶茂",
+  "speaker": "S0164"
+ },
+ {
+  "id": "S0207_M-0207-2_085088-085556",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0207\\S0207_M-0207-2_085088-085556.wav",
+  "reference": "温暖的阳光洒下令大地焕发出新的生机",
+  "speaker": "S0207"
+ },
+ {
+  "id": "S0092_M-0092-2_009948-010388",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0092\\S0092_M-0092-2_009948-010388.wav",
+  "reference": "不管未来如何心中抱有希望生活就能充满光明",
+  "speaker": "S0092"
+ },
+ {
+  "id": "S0165_M-0165-2_009972-010520",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0165\\S0165_M-0165-2_009972-010520.wav",
+  "reference": "每一粒沙子都藏着时间的故事静静倾诉着岁月",
+  "speaker": "S0165"
+ },
+ {
+  "id": "S0091_M-0091-2_055100-055736",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0091\\S0091_M-0091-2_055100-055736.wav",
+  "reference": "一场雨后空气中弥漫着泥土的芬芳自然的气息令人陶醉",
+  "speaker": "S0091"
+ },
+ {
+  "id": "S0046_M-0046-2_016992-017480",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0046\\S0046_M-0046-2_016992-017480.wav",
+  "reference": "一幅画作能表达出无声的情感与力量",
+  "speaker": "S0046"
+ },
+ {
+  "id": "S0054_M-0054-2_013428-013992",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0054\\S0054_M-0054-2_013428-013992.wav",
+  "reference": "春天的花海如梦似幻令人心生向往之情",
+  "speaker": "S0054"
+ },
+ {
+  "id": "S0192_M-0192-2_077872-078508",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0192\\S0192_M-0192-2_077872-078508.wav",
+  "reference": "漫天飞舞的雪花仿佛是童话世界中的一幕让人陶醉",
+  "speaker": "S0192"
+ },
+ {
+  "id": "S0202_M-0202-2_050428-050888",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0202\\S0202_M-0202-2_050428-050888.wav",
+  "reference": "天边的彩虹宛如一条绚丽的桥梁连接着两个世界",
+  "speaker": "S0202"
+ },
+ {
+  "id": "S0046_M-0046-2_011644-012140",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0046\\S0046_M-0046-2_011644-012140.wav",
+  "reference": "生活在细节中方能品味到真实的幸福",
+  "speaker": "S0046"
+ },
+ {
+  "id": "S0053_M-0053-2_033024-033468",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0053\\S0053_M-0053-2_033024-033468.wav",
+  "reference": "透过树叶的阳光宛如梦想的光辉在闪烁",
+  "speaker": "S0053"
+ },
+ {
+  "id": "S0054_M-0054-2_048012-048660",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0054\\S0054_M-0054-2_048012-048660.wav",
+  "reference": "秋高气爽的下午是我最喜欢徒步旅行的时刻",
+  "speaker": "S0054"
+ },
+ {
+  "id": "S0057_M-0057-2_059140-059752",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0057\\S0057_M-0057-2_059140-059752.wav",
+  "reference": "一本好书可以带你走入一个全新的世界忘却现实的烦恼",
+  "speaker": "S0057"
+ },
+ {
+  "id": "S0165_M-0165-2_055164-055624",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0165\\S0165_M-0165-2_055164-055624.wav",
+  "reference": "充满温情的话语似乎能抚慰每一个受伤的心灵",
+  "speaker": "S0165"
+ },
+ {
+  "id": "S0192_M-0192-2_101472-102124",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0192\\S0192_M-0192-2_101472-102124.wav",
+  "reference": "听风对树叶说悄悄话那是自然的秘密我们无从知晓",
+  "speaker": "S0192"
+ },
+ {
+  "id": "S0193_M-0193-2_039640-040148",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0193\\S0193_M-0193-2_039640-040148.wav",
+  "reference": "超越困难的过程让我们变得更加坚强和成熟",
+  "speaker": "S0193"
+ },
+ {
+  "id": "S0202_M-0202-2_060280-060776",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0202\\S0202_M-0202-2_060280-060776.wav",
+  "reference": "生命的短暂让我更加珍惜与家人共度的每一分每一秒",
+  "speaker": "S0202"
+ },
+ {
+  "id": "S0207_M-0207-2_069552-070104",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0207\\S0207_M-0207-2_069552-070104.wav",
+  "reference": "夜空中的星星璀璨夺目仿佛诉说着古老的传说",
+  "speaker": "S0207"
+ },
+ {
+  "id": "S0212_M-0212-2_006164-006880",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0212\\S0212_M-0212-2_006164-006880.wav",
+  "reference": "黄昏时分天边的晚霞如火焰般耀眼让人忍不住想要驻足观赏",
+  "speaker": "S0212"
+ },
+ {
+  "id": "S0213_M-0213-2_067524-068084",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0213\\S0213_M-0213-2_067524-068084.wav",
+  "reference": "在思考中成长在实践中进步才是生命的真谛",
+  "speaker": "S0213"
+ },
+ {
+  "id": "S0046_M-0046-2_017648-018308",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0046\\S0046_M-0046-2_017648-018308.wav",
+  "reference": "漫步在海边听海浪拍打礁石心中无比宁静",
+  "speaker": "S0046"
+ },
+ {
+  "id": "S0053_M-0053-2_072376-072848",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0053\\S0053_M-0053-2_072376-072848.wav",
+  "reference": "思念如潮水般涌来久久不能平息",
+  "speaker": "S0053"
+ },
+ {
+  "id": "S0054_M-0054-2_005360-006012",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0054\\S0054_M-0054-2_005360-006012.wav",
+  "reference": "古老的建筑讲述着历史的沧桑令人感慨万千",
+  "speaker": "S0054"
+ },
+ {
+  "id": "S0057_M-0057-2_017208-017744",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0057\\S0057_M-0057-2_017208-017744.wav",
+  "reference": "知识的海洋无边无际等待着每一个渴望探索的心灵",
+  "speaker": "S0057"
+ },
+ {
+  "id": "S0063_M-0063-2_023924-024464",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0063\\S0063_M-0063-2_023924-024464.wav",
+  "reference": "体验新事物的过程往往是最令人兴奋的冒险",
+  "speaker": "S0063"
+ },
+ {
+  "id": "S0067_M-0067-2_016548-017060",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0067\\S0067_M-0067-2_016548-017060.wav",
+  "reference": "漫步在沙滩上脚下的细沙温暖而柔软令人放松",
+  "speaker": "S0067"
+ },
+ {
+  "id": "S0069_M-0069-2_062708-063300",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0069\\S0069_M-0069-2_062708-063300.wav",
+  "reference": "思绪如云彩般飘荡让人无法预知未来的方向",
+  "speaker": "S0069"
+ },
+ {
+  "id": "S0090_M-0090-2_073792-074212",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0090\\S0090_M-0090-2_073792-074212.wav",
+  "reference": "开车驶过长长的隧道心中充满了对未知的期待",
+  "speaker": "S0090"
+ },
+ {
+  "id": "S0115_M-0115-2_039876-040392",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0115\\S0115_M-0115-2_039876-040392.wav",
+  "reference": "在广袤的星空下思绪漂浮仿佛能触摸到宇宙的奥秘",
+  "speaker": "S0115"
+ },
+ {
+  "id": "S0164_M-0164-2_004032-004568",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0164\\S0164_M-0164-2_004032-004568.wav",
+  "reference": "当音乐响起一切仿佛都变得生动而真实",
+  "speaker": "S0164"
+ },
+ {
+  "id": "S0165_M-0165-2_080496-080976",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0165\\S0165_M-0165-2_080496-080976.wav",
+  "reference": "夜深人静时只有钟表的滴答声打破宁静",
+  "speaker": "S0165"
+ },
+ {
+  "id": "S0190_M-0190-2_005608-006088",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0190\\S0190_M-0190-2_005608-006088.wav",
+  "reference": "漫长的冬夜窗外的雪花如同梦境让我沉醉不已",
+  "speaker": "S0190"
+ },
+ {
+  "id": "S0191_M-0191-2_041480-042048",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0191\\S0191_M-0191-2_041480-042048.wav",
+  "reference": "乡间的田野一片金黄稻谷成熟迎来了丰收的季节",
+  "speaker": "S0191"
+ },
+ {
+  "id": "S0192_M-0192-2_022912-023448",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0192\\S0192_M-0192-2_022912-023448.wav",
+  "reference": "每一次新鲜的尝试都是对自我的一次全新挑战",
+  "speaker": "S0192"
+ },
+ {
+  "id": "S0193_M-0193-2_088440-088804",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0193\\S0193_M-0193-2_088440-088804.wav",
+  "reference": "生活的细节往往藏着无限的美好和感动",
+  "speaker": "S0193"
+ },
+ {
+  "id": "S0202_M-0202-2_000344-000844",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0202\\S0202_M-0202-2_000344-000844.wav",
+  "reference": "一段回忆是一道光照亮了心灵最深处的角落",
+  "speaker": "S0202"
+ },
+ {
+  "id": "S0207_M-0207-2_084240-084840",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0207\\S0207_M-0207-2_084240-084840.wav",
+  "reference": "一封来自远方的明信片带着祝福与思念温暖了心灵",
+  "speaker": "S0207"
+ },
+ {
+  "id": "S0212_M-0212-2_042760-043252",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0212\\S0212_M-0212-2_042760-043252.wav",
+  "reference": "在山顶俯瞰城市繁华似乎所有的烦恼都烟消云散",
+  "speaker": "S0212"
+ },
+ {
+  "id": "S0213_M-0213-2_024532-025052",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0213\\S0213_M-0213-2_024532-025052.wav",
+  "reference": "阳光透过窗帘洒在书桌上增添了几分浪漫",
+  "speaker": "S0213"
+ },
+ {
+  "id": "S0046_M-0046-2_021024-021588",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0046\\S0046_M-0046-2_021024-021588.wav",
+  "reference": "在橘子丰收的季节酸甜的果实挂满了枝头",
+  "speaker": "S0046"
+ },
+ {
+  "id": "S0053_M-0053-2_013764-014276",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0053\\S0053_M-0053-2_013764-014276.wav",
+  "reference": "生活的每一次风浪都是我们成长与蜕变的过程",
+  "speaker": "S0053"
+ },
+ {
+  "id": "S0054_M-0054-2_007492-008108",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0054\\S0054_M-0054-2_007492-008108.wav",
+  "reference": "秋天的果园满是丰收的喜悦四处弥漫着果香",
+  "speaker": "S0054"
+ },
+ {
+  "id": "S0055_M-0055-2_006524-007072",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0055\\S0055_M-0055-2_006524-007072.wav",
+  "reference": "阳光透过树叶的缝隙洒在小径上像是自然的魔法",
+  "speaker": "S0055"
+ },
+ {
+  "id": "S0057_M-0057-2_046340-046808",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0057\\S0057_M-0057-2_046340-046808.wav",
+  "reference": "老旧的时钟轻轻滴答似乎在讲述过去的故事",
+  "speaker": "S0057"
+ },
+ {
+  "id": "S0063_M-0063-2_031420-031840",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0063\\S0063_M-0063-2_031420-031840.wav",
+  "reference": "一次微笑可能带来意想不到的温暖与快乐",
+  "speaker": "S0063"
+ },
+ {
+  "id": "S0065_M-0065-2_025640-026192",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0065\\S0065_M-0065-2_025640-026192.wav",
+  "reference": "每当聆听那些旧歌似乎能穿越时光感受到往日的温暖",
+  "speaker": "S0065"
+ },
+ {
+  "id": "S0067_M-0067-2_020432-020820",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0067\\S0067_M-0067-2_020432-020820.wav",
+  "reference": "生活的每一步都是新的起点充满可能",
+  "speaker": "S0067"
+ },
+ {
+  "id": "S0069_M-0069-2_097960-098412",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0069\\S0069_M-0069-2_097960-098412.wav",
+  "reference": "生命的每一次经历都是一笔宝贵的财富",
+  "speaker": "S0069"
+ },
+ {
+  "id": "S0090_M-0090-2_048328-048660",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0090\\S0090_M-0090-2_048328-048660.wav",
+  "reference": "夜晚的灯光为城市披上了迷人的光纱",
+  "speaker": "S0090"
+ },
+ {
+  "id": "S0094_M-0094-2_004320-004808",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0094\\S0094_M-0094-2_004320-004808.wav",
+  "reference": "躺在草地上仰望蓝天感受那份无拘无束",
+  "speaker": "S0094"
+ },
+ {
+  "id": "S0095_M-0095-2_089464-089968",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0095\\S0095_M-0095-2_089464-089968.wav",
+  "reference": "在浩瀚的宇宙中每一个生命都是独特而珍贵的存在",
+  "speaker": "S0095"
+ },
+ {
+  "id": "S0114_M-0114-2_063608-064080",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0114\\S0114_M-0114-2_063608-064080.wav",
+  "reference": "一道光透过窗帘照耀在生活的每一个角落",
+  "speaker": "S0114"
+ },
+ {
+  "id": "S0115_M-0115-2_083104-083600",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0115\\S0115_M-0115-2_083104-083600.wav",
+  "reference": "一条幽静的小路通向未知充满无限可能",
+  "speaker": "S0115"
+ },
+ {
+  "id": "S0163_M-0163-2_128320-129152",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0163\\S0163_M-0163-2_128320-129152.wav",
+  "reference": "夜空中繁星点点仿佛在讲述着古老的故事神秘而迷人",
+  "speaker": "S0163"
+ },
+ {
+  "id": "S0164_M-0164-2_079500-079956",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0164\\S0164_M-0164-2_079500-079956.wav",
+  "reference": "每当夜幕降临城市的灯光如星星般闪烁",
+  "speaker": "S0164"
+ },
+ {
+  "id": "S0165_M-0165-2_041560-041944",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0165\\S0165_M-0165-2_041560-041944.wav",
+  "reference": "在星空下许愿期待未来的美好与幸福",
+  "speaker": "S0165"
+ },
+ {
+  "id": "S0166_M-0166-2_059748-060324",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0166\\S0166_M-0166-2_059748-060324.wav",
+  "reference": "每一本书都有独特的视角带给我们新发现",
+  "speaker": "S0166"
+ },
+ {
+  "id": "S0190_M-0190-2_093164-093588",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0190\\S0190_M-0190-2_093164-093588.wav",
+  "reference": "每次旅行都是一次心灵的洗礼与成长",
+  "speaker": "S0190"
+ },
+ {
+  "id": "S0191_M-0191-2_062932-063404",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0191\\S0191_M-0191-2_062932-063404.wav",
+  "reference": "在山顶俯瞰四周仿佛所有的烦恼都被抛在身后",
+  "speaker": "S0191"
+ },
+ {
+  "id": "S0192_M-0192-2_063180-063672",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0192\\S0192_M-0192-2_063180-063672.wav",
+  "reference": "晚霞映照在湖面勾勒出如梦似幻的美景",
+  "speaker": "S0192"
+ },
+ {
+  "id": "S0193_M-0193-2_035180-035744",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0193\\S0193_M-0193-2_035180-035744.wav",
+  "reference": "月光洒在湖面上波光粼粼宛如一幅动人的画卷",
+  "speaker": "S0193"
+ },
+ {
+  "id": "S0202_M-0202-2_070572-071064",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0202\\S0202_M-0202-2_070572-071064.wav",
+  "reference": "在人生的旅途中我们都是彼此的陪伴携手前行",
+  "speaker": "S0202"
+ },
+ {
+  "id": "S0207_M-0207-2_092092-092588",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0207\\S0207_M-0207-2_092092-092588.wav",
+  "reference": "每一个微笑都是一束阳光温暖着彼此的心灵",
+  "speaker": "S0207"
+ },
+ {
+  "id": "S0208_M-0208-2_046988-047432",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0208\\S0208_M-0208-2_046988-047432.wav",
+  "reference": "在长途旅行中偶遇的风景总是令人心动不已",
+  "speaker": "S0208"
+ },
+ {
+  "id": "S0212_M-0212-2_060640-061180",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0212\\S0212_M-0212-2_060640-061180.wav",
+  "reference": "每一次相遇都是命运的安排让我更加珍惜身边的人",
+  "speaker": "S0212"
+ },
+ {
+  "id": "S0046_M-0046-2_071996-072480",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0046\\S0046_M-0046-2_071996-072480.wav",
+  "reference": "童年的梦想随着时间的推移依然在心中闪耀",
+  "speaker": "S0046"
+ },
+ {
+  "id": "S0053_M-0053-2_033568-034092",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0053\\S0053_M-0053-2_033568-034092.wav",
+  "reference": "夜晚的城市灯光璀璨映衬着人们的欢声笑语",
+  "speaker": "S0053"
+ },
+ {
+  "id": "S0054_M-0054-2_037120-037696",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0054\\S0054_M-0054-2_037120-037696.wav",
+  "reference": "夜空中繁星点点诉说着无尽的浪漫与梦幻",
+  "speaker": "S0054"
+ },
+ {
+  "id": "S0055_M-0055-2_043988-044508",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0055\\S0055_M-0055-2_043988-044508.wav",
+  "reference": "朝阳下的广场人们在舞动热情与活力充盈四周",
+  "speaker": "S0055"
+ },
+ {
+  "id": "S0057_M-0057-2_078144-078652",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0057\\S0057_M-0057-2_078144-078652.wav",
+  "reference": "在大海边奔跑感受海浪拍打沙滩的节奏与力量",
+  "speaker": "S0057"
+ },
+ {
+  "id": "S0063_M-0063-2_027848-028440",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0063\\S0063_M-0063-2_027848-028440.wav",
+  "reference": "每段旅途都充满了未知的惊喜期待着新的邂逅与故事",
+  "speaker": "S0063"
+ },
+ {
+  "id": "S0065_M-0065-2_087556-088020",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0065\\S0065_M-0065-2_087556-088020.wav",
+  "reference": "在这座古老的城市历史的足迹依稀可见",
+  "speaker": "S0065"
+ },
+ {
+  "id": "S0067_M-0067-2_063560-063964",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0067\\S0067_M-0067-2_063560-063964.wav",
+  "reference": "清新的空气中弥漫着花香让人心旷神怡",
+  "speaker": "S0067"
+ },
+ {
+  "id": "S0069_M-0069-2_064624-065232",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0069\\S0069_M-0069-2_064624-065232.wav",
+  "reference": "雪花飘落在肩头带来的清新的气息令人耳目一新",
+  "speaker": "S0069"
+ },
+ {
+  "id": "S0090_M-0090-2_039040-039480",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0090\\S0090_M-0090-2_039040-039480.wav",
+  "reference": "明亮的灯光下一场精彩的表演让我流连忘返",
+  "speaker": "S0090"
+ },
+ {
+  "id": "S0091_M-0091-2_061136-061660",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0091\\S0091_M-0091-2_061136-061660.wav",
+  "reference": "深夜里的星空诉说着属于宇宙的秘密我愿倾听",
+  "speaker": "S0091"
+ },
+ {
+  "id": "S0092_M-0092-2_063356-063804",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0092\\S0092_M-0092-2_063356-063804.wav",
+  "reference": "心中有爱生活就会处处充满阳光与希望",
+  "speaker": "S0092"
+ },
+ {
+  "id": "S0094_M-0094-2_098996-099456",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0094\\S0094_M-0094-2_098996-099456.wav",
+  "reference": "城市的喧嚣中偶尔能听见心灵的低语",
+  "speaker": "S0094"
+ },
+ {
+  "id": "S0095_M-0095-2_020452-020864",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0095\\S0095_M-0095-2_020452-020864.wav",
+  "reference": "海浪拍打着岸边像是大自然在轻轻低语",
+  "speaker": "S0095"
+ },
+ {
+  "id": "S0114_M-0114-2_045668-046228",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0114\\S0114_M-0114-2_045668-046228.wav",
+  "reference": "在书中遨游逆风飞翔体验多彩的人生",
+  "speaker": "S0114"
+ },
+ {
+  "id": "S0115_M-0115-2_072620-073064",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0115\\S0115_M-0115-2_072620-073064.wav",
+  "reference": "蜜蜂在花丛中忙碌勤劳的身影是自然的奇迹",
+  "speaker": "S0115"
+ },
+ {
+  "id": "S0163_M-0163-2_028308-028984",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0163\\S0163_M-0163-2_028308-028984.wav",
+  "reference": "一杯香茶伴随着清晨的第一缕阳光令人放松",
+  "speaker": "S0163"
+ },
+ {
+  "id": "S0164_M-0164-2_035772-036360",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0164\\S0164_M-0164-2_035772-036360.wav",
+  "reference": "海浪轻轻拍打岸边带来一阵阵心灵的涟漪令人陶醉",
+  "speaker": "S0164"
+ },
+ {
+  "id": "S0165_M-0165-2_067304-067788",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0165\\S0165_M-0165-2_067304-067788.wav",
+  "reference": "路边的野花总是让人忍不住停下脚步去欣赏",
+  "speaker": "S0165"
+ },
+ {
+  "id": "S0166_M-0166-2_052568-053140",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0166\\S0166_M-0166-2_052568-053140.wav",
+  "reference": "有时候沉默胜过千言万语内心的平和最重要",
+  "speaker": "S0166"
+ },
+ {
+  "id": "S0190_M-0190-2_045476-045908",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0190\\S0190_M-0190-2_045476-045908.wav",
+  "reference": "夜空中繁星点点仿佛诉说着古老的传说",
+  "speaker": "S0190"
+ },
+ {
+  "id": "S0191_M-0191-2_002720-003128",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0191\\S0191_M-0191-2_002720-003128.wav",
+  "reference": "时间是最宝贵的财富懂得珍惜才是聪明人",
+  "speaker": "S0191"
+ },
+ {
+  "id": "S0192_M-0192-2_051144-051668",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0192\\S0192_M-0192-2_051144-051668.wav",
+  "reference": "小路两旁的花朵盛开仿佛在向路人致意",
+  "speaker": "S0192"
+ },
+ {
+  "id": "S0193_M-0193-2_103136-103568",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0193\\S0193_M-0193-2_103136-103568.wav",
+  "reference": "一次简单的旅行让我重新审视了生活",
+  "speaker": "S0193"
+ },
+ {
+  "id": "S0202_M-0202-2_046560-047088",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0202\\S0202_M-0202-2_046560-047088.wav",
+  "reference": "描绘梦想的蓝图总能让我在艰难时坚持下去",
+  "speaker": "S0202"
+ },
+ {
+  "id": "S0207_M-0207-2_096208-096736",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0207\\S0207_M-0207-2_096208-096736.wav",
+  "reference": "故乡的小道旁曾经的回忆依然在心里荡漾不息",
+  "speaker": "S0207"
+ },
+ {
+  "id": "S0208_M-0208-2_089648-090160",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0208\\S0208_M-0208-2_089648-090160.wav",
+  "reference": "在河边垂钓享受着静谧时光心中充满宁静",
+  "speaker": "S0208"
+ },
+ {
+  "id": "S0212_M-0212-2_091916-092380",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0212\\S0212_M-0212-2_091916-092380.wav",
+  "reference": "夏日的午后阳光穿透树叶斑驳而美丽",
+  "speaker": "S0212"
+ },
+ {
+  "id": "S0055_M-0055-2_038308-038740",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0055\\S0055_M-0055-2_038308-038740.wav",
+  "reference": "在失败中找到成长的机会才是真正的胜利",
+  "speaker": "S0055"
+ },
+ {
+  "id": "S0057_M-0057-2_037932-038436",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0057\\S0057_M-0057-2_037932-038436.wav",
+  "reference": "乡间的老房子散发着浓浓的怀旧气息温暖感人",
+  "speaker": "S0057"
+ },
+ {
+  "id": "S0063_M-0063-2_046472-046900",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0063\\S0063_M-0063-2_046472-046900.wav",
+  "reference": "一份简单的早餐带来一天的好心情",
+  "speaker": "S0063"
+ },
+ {
+  "id": "S0065_M-0065-2_083068-083504",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0065\\S0065_M-0065-2_083068-083504.wav",
+  "reference": "生活的每一次波折都是成长过程中的财富",
+  "speaker": "S0065"
+ },
+ {
+  "id": "S0067_M-0067-2_089520-089932",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0067\\S0067_M-0067-2_089520-089932.wav",
+  "reference": "旅行带来的不仅是风景更是心灵的洗礼",
+  "speaker": "S0067"
+ },
+ {
+  "id": "S0069_M-0069-2_050928-051312",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0069\\S0069_M-0069-2_050928-051312.wav",
+  "reference": "每一条河流都有自己的故事静静流淌",
+  "speaker": "S0069"
+ },
+ {
+  "id": "S0090_M-0090-2_085528-086076",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0090\\S0090_M-0090-2_085528-086076.wav",
+  "reference": "每一份努力都不会被辜负未来的自己一定会感谢现在的坚持",
+  "speaker": "S0090"
+ },
+ {
+  "id": "S0091_M-0091-2_056000-056576",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0091\\S0091_M-0091-2_056000-056576.wav",
+  "reference": "冬雪覆盖了整个城市行人匆匆散发着热气的呼吸",
+  "speaker": "S0091"
+ },
+ {
+  "id": "S0092_M-0092-2_004740-005168",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0092\\S0092_M-0092-2_004740-005168.wav",
+  "reference": "生命的意义在于不断追求人生的更多精彩与可能",
+  "speaker": "S0092"
+ },
+ {
+  "id": "S0094_M-0094-2_061904-062452",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0094\\S0094_M-0094-2_061904-062452.wav",
+  "reference": "细细品味生活的点滴常常发现意想不到的快乐",
+  "speaker": "S0094"
+ },
+ {
+  "id": "S0095_M-0095-2_012476-012900",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0095\\S0095_M-0095-2_012476-012900.wav",
+  "reference": "温暖的炉火旁讲述着一个又一个动人的故事",
+  "speaker": "S0095"
+ },
+ {
+  "id": "S0114_M-0114-2_024316-024840",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0114\\S0114_M-0114-2_024316-024840.wav",
+  "reference": "有些事情不需要解释真心相待便能理解彼此的心意",
+  "speaker": "S0114"
+ },
+ {
+  "id": "S0115_M-0115-2_031648-032232",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0115\\S0115_M-0115-2_031648-032232.wav",
+  "reference": "在喧闹的城市中偶尔需要逃离寻找宁静的角落",
+  "speaker": "S0115"
+ },
+ {
+  "id": "S0163_M-0163-2_064732-065572",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0163\\S0163_M-0163-2_064732-065572.wav",
+  "reference": "一顿丰盛的晚餐不仅仅是味觉的享受更是心灵的共鸣",
+  "speaker": "S0163"
+ },
+ {
+  "id": "S0164_M-0164-2_043928-044392",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0164\\S0164_M-0164-2_043928-044392.wav",
+  "reference": "每个孩子都是一颗星星璀璨而独特的存在",
+  "speaker": "S0164"
+ },
+ {
+  "id": "S0165_M-0165-2_057736-058268",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0165\\S0165_M-0165-2_057736-058268.wav",
+  "reference": "一场突如其来的雨让世界洗净了一切焕然一新",
+  "speaker": "S0165"
+ },
+ {
+  "id": "S0166_M-0166-2_091856-092400",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0166\\S0166_M-0166-2_091856-092400.wav",
+  "reference": "生命的每个阶段都有不同的滋味与感悟",
+  "speaker": "S0166"
+ },
+ {
+  "id": "S0190_M-0190-2_025024-025532",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0190\\S0190_M-0190-2_025024-025532.wav",
+  "reference": "带着满满的期待去旅行每一个目的地都是新的冒险",
+  "speaker": "S0190"
+ },
+ {
+  "id": "S0191_M-0191-2_077516-077976",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0191\\S0191_M-0191-2_077516-077976.wav",
+  "reference": "电影院里观众屏息以待期待着精彩的剧情",
+  "speaker": "S0191"
+ },
+ {
+  "id": "S0192_M-0192-2_059676-060288",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0192\\S0192_M-0192-2_059676-060288.wav",
+  "reference": "夜空中繁星闪烁像是遥远的梦想在呼唤我们前行",
+  "speaker": "S0192"
+ },
+ {
+  "id": "S0193_M-0193-2_050040-050464",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0193\\S0193_M-0193-2_050040-050464.wav",
+  "reference": "在雨中漫步每一滴雨水都是思绪的涟漪",
+  "speaker": "S0193"
+ },
+ {
+  "id": "S0202_M-0202-2_076904-077260",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0202\\S0202_M-0202-2_076904-077260.wav",
+  "reference": "一张素描勾勒出心中对生活的无限想象",
+  "speaker": "S0202"
+ },
+ {
+  "id": "S0207_M-0207-2_054140-054620",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0207\\S0207_M-0207-2_054140-054620.wav",
+  "reference": "在阳光明媚的日子里心中充满了无限的希望",
+  "speaker": "S0207"
+ },
+ {
+  "id": "S0208_M-0208-2_004228-004728",
+  "audio": "D:\\App\\rsApp\\voicebox\\data\\datasets\\qwen3-asr-strict-v5\\audio\\valid\\S0208\\S0208_M-0208-2_004228-004728.wav",
+  "reference": "在沙滩上奔跑享受细沙与海水带来的快乐",
+  "speaker": "S0208"
+ }
+]

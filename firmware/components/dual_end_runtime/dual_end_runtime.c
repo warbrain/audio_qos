@@ -478,7 +478,9 @@ void dual_end_runtime_record_outcome(dual_end_perf_stage_t stage, uint8_t codec,
         w->active = false;
     }
     if (!w->active) {
-        dual_end_perf_reset(&w->stats, codec, session_id, DUAL_END_AUDIO_TASK_CORE);
+        const int expected_core = stage == DUAL_END_STAGE_ENCODE
+            ? MIC_FRAME_DISPATCH_TASK_CORE : DUAL_END_AUDIO_TASK_CORE;
+        dual_end_perf_reset(&w->stats, codec, session_id, expected_core);
         w->started_us = elapsed_us >= 0 && elapsed_us < now ? now - elapsed_us : now;
         w->owner = xTaskGetCurrentTaskHandle();
         w->active = true;
