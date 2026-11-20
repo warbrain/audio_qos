@@ -52,3 +52,21 @@ _asr_sim/snr_threshold/
 _train/code/*.pt
 # Release notes are generated per release and stay out of the repository.
 firmware/RELEASE_NOTES_*.md
+
+# Flashed animation payload is generated per build; never commit it.
+firmware/*/animation_flashed.bin
+
+# Evaluation reports and per-run score dumps are analysis output, not sources.
+_asr_sim/**/*.md
+_asr_sim/*_rows.jsonl
+_asr_sim/*_sweep.json
+_asr_sim/score_summary.json
+_asr_sim/field_*.json
+_asr_sim/v6_4.json
+_asr_sim/v6_48.json
+_asr_sim/v6_120.json
+_asr_sim/dist_lateral.json_asr_sim/fusion392_*.jsonl
+_asr_sim/model_*_rows.jsonl
+_asr_sim/ss*_rows.jsonl
+_asr_sim/vad_removed_rows.jsonl
+_train/*.md
