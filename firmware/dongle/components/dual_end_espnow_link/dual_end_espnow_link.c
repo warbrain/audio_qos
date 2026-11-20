@@ -797,6 +797,8 @@ finished:
     } else {
         ++s_radio.fail;
         ++s_tx_callback_recovery_fail_count;
+        /* Serialize with mark_peer_seen before publishing the terminal state. */
+        (void)link_state_invalidate();
         s_radio.state = AUDIO_RADIO_FAILED_OFF;
     }
     ++s_radio_revision;
@@ -943,16 +945,24 @@ static bool is_valid_framework_packet(const uint8_t *data, int len)
            header->payload_len <= (uint16_t)(len - (int)sizeof(*header));
 }
 
-static void mark_peer_seen(int rssi)
+static bool mark_peer_seen(int rssi)
 {
+    /* An RX packet can outlive the radio instance that queued it. */
+    portENTER_CRITICAL(&s_tx_stats_lock);
+    if (s_radio.state == AUDIO_RADIO_FAILED_OFF) {
+        portEXIT_CRITICAL(&s_tx_stats_lock);
+        return false;
+    }
     portENTER_CRITICAL(&s_peer_state_lock);
     s_last_seen_us = esp_timer_get_time();
     s_last_rssi = rssi;
     s_connected = true;
     portEXIT_CRITICAL(&s_peer_state_lock);
+    portEXIT_CRITICAL(&s_tx_stats_lock);
     if (s_channel_fallback_due_ms != 0) {
         s_channel_peer_seen_after_switch = true;
     }
+    return true;
 }
 
 /* Preserve complete stereo audio packets across ordinary control/OTA backlog.
@@ -1031,7 +1041,7 @@ static void rx_worker_task(void *arg)
         }
 
         if (is_valid_framework_packet(packet.data, packet.len)) {
-            mark_peer_seen(packet.rssi);
+            if (!mark_peer_seen(packet.rssi)) continue;
             const dual_end_packet_header_t *header =
                 (const dual_end_packet_header_t *)packet.data;
             if (header->message_type == SCEPTER_MSG_CONTROL_RESPONSE) {
@@ -1557,6 +1567,14 @@ static void link_status_task(void *arg)
     while (true) {
         radio_publish_status();
         if (!radio_ready()) {
+            portENTER_CRITICAL(&s_tx_stats_lock);
+            const bool failed_off = s_radio.state == AUDIO_RADIO_FAILED_OFF;
+            portEXIT_CRITICAL(&s_tx_stats_lock);
+            if (failed_off) {
+                const link_state_snapshot_t link_state = link_state_snapshot();
+                stability_log_link(false, link_state.rssi, false);
+                notify_status_if_changed(false, link_state.rssi);
+            }
             vTaskDelay(pdMS_TO_TICKS(DUAL_END_CHANNEL_TASK_POLL_MS));
             continue;
         }

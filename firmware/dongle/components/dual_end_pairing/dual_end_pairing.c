@@ -200,7 +200,12 @@ static esp_err_t pairing_mutation_begin(bool require_release_ready,
 static void format_info(char *response, size_t response_size)
 {
     dual_end_pairing_status_t status = {0};
-    (void)dual_end_espnow_link_get_pairing_status(&status);
+    const esp_err_t ret = dual_end_espnow_link_get_pairing_status(&status);
+    if (ret != ESP_OK) {
+        snprintf(response, response_size, "ERR PAIR reason=status_unavailable error=%s\n",
+                 esp_err_to_name(ret));
+        return;
+    }
 
     char peer[24] = "none";
     char key_id[DUAL_END_PAIRING_KEY_ID_BYTES * 2 + 1] = "none";

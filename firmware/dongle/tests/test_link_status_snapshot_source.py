@@ -10,6 +10,7 @@ from pathlib import Path
 
 DONGLE = Path(__file__).resolve().parents[1]
 LINK = DONGLE / "components/dual_end_espnow_link/dual_end_espnow_link.c"
+PAIRING = DONGLE / "components/dual_end_pairing/dual_end_pairing.c"
 APP = DONGLE / "main/app_main.c"
 
 
@@ -72,14 +73,14 @@ def test_link_state_writers_keep_connected_and_rssi_under_the_same_guard() -> No
             "static link_state_snapshot_t link_state_refresh_from_last_seen(int64_t now_us)",
             "s_connected = s_last_seen_us > 0 &&",
         ),
-        ("static void mark_peer_seen(int rssi)", "s_connected = true;"),
+        ("static bool mark_peer_seen(int rssi)", "s_connected = true;"),
     ):
         body = _function_body(source, signature)
         assert body.index("portENTER_CRITICAL(&s_peer_state_lock);") < body.index(
             connected_update
         ) < body.index("portEXIT_CRITICAL(&s_peer_state_lock);")
 
-    seen = _function_body(source, "static void mark_peer_seen(int rssi)")
+    seen = _function_body(source, "static bool mark_peer_seen(int rssi)")
     assert seen.index("s_last_rssi = rssi;") < seen.index("s_connected = true;")
     _assert_writes_are_confined(
         source,
@@ -87,7 +88,7 @@ def test_link_state_writers_keep_connected_and_rssi_under_the_same_guard() -> No
         (
             "static link_state_snapshot_t link_state_invalidate(void)",
             "static link_state_snapshot_t link_state_refresh_from_last_seen(int64_t now_us)",
-            "static void mark_peer_seen(int rssi)",
+            "static bool mark_peer_seen(int rssi)",
             "esp_err_t dual_end_espnow_link_init(scepter_role_t role)",
         ),
     )
@@ -95,7 +96,7 @@ def test_link_state_writers_keep_connected_and_rssi_under_the_same_guard() -> No
         source,
         "s_last_rssi",
         (
-            "static void mark_peer_seen(int rssi)",
+            "static bool mark_peer_seen(int rssi)",
             "esp_err_t dual_end_espnow_link_init(scepter_role_t role)",
         ),
     )
@@ -146,3 +147,39 @@ def test_dsp_status_four_logs_the_specific_local_forward_failure() -> None:
     assert "esp_err_to_name(ret)" in request
     assert "hid_status=4" in request
     assert request.index("DSP_FORWARD_REJECT token=") < request.index("s_dsp_reply[10]=4")
+
+
+def test_failed_radio_clears_link_and_rejects_queued_rx() -> None:
+    source = LINK.read_text(encoding="utf-8")
+    recover = _function_body(
+        source, "static esp_err_t radio_recover_locked(audio_radio_reason_t reason)"
+    )
+    failure = recover[recover.index("++s_radio.fail;") :]
+    assert failure.index("link_state_invalidate();") < failure.index(
+        "s_radio.state = AUDIO_RADIO_FAILED_OFF;"
+    ) < failure.index("portEXIT_CRITICAL(&s_tx_stats_lock);")
+
+    seen = _function_body(source, "static bool mark_peer_seen(int rssi)")
+    assert seen.index("portENTER_CRITICAL(&s_tx_stats_lock);") < seen.index(
+        "if (s_radio.state == AUDIO_RADIO_FAILED_OFF)"
+    ) < seen.index("return false;") < seen.index("s_connected = true;")
+    worker = _function_body(source, "static void rx_worker_task(void *arg)")
+    assert "if (!mark_peer_seen(packet.rssi)) continue;" in worker
+
+    task = _function_body(source, "static void link_status_task(void *arg)")
+    offline = task[task.index("if (!radio_ready())") : task.index("uint32_t now_ms")]
+    assert offline.index("s_radio.state == AUDIO_RADIO_FAILED_OFF") < offline.index(
+        "portEXIT_CRITICAL(&s_tx_stats_lock);"
+    ) < offline.index("if (failed_off)") < offline.index(
+        "notify_status_if_changed(false, link_state.rssi);"
+    )
+
+
+def test_pair_info_returns_error_before_formatting_unknown_pairing_state() -> None:
+    source = PAIRING.read_text(encoding="utf-8")
+    info = _function_body(source, "static void format_info(char *response, size_t response_size)")
+    assert info.index("dual_end_espnow_link_get_pairing_status(&status)") < info.index(
+        "if (ret != ESP_OK)"
+    ) < info.index("ERR PAIR reason=status_unavailable") < info.index(
+        "return;"
+    ) < info.index("OK PAIR INFO")
