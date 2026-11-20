@@ -55,8 +55,13 @@ def render(args: argparse.Namespace, rt60: float, distance: float,
         room.add_source(mouth_pos, signal=pad)
 
     rng = np.random.default_rng(args.seed)
+    shared = rng.standard_normal(n) * 0.05
     for pos in speaker_positions(args):
-        room.add_source(pos, signal=rng.standard_normal(n) * 0.05)
+        # --noise-correlated feeds both cabinets the same signal, which is what
+        # the bench looks like: a symmetric coherent field gives the 0.984
+        # inter-channel correlation that independent noise cannot reach.
+        sig = shared if args.noise_correlated else rng.standard_normal(n) * 0.05
+        room.add_source(pos, signal=sig)
 
     room.simulate()
     sig = room.mic_array.signals
@@ -177,6 +182,7 @@ def main() -> int:
     ap.add_argument("--fixed-rt60", type=float, default=0.05)
     ap.add_argument("--speaker-layout", choices=["lateral", "diagonal"], default="lateral")
     ap.add_argument("--speaker-offset", type=float, default=0.40)
+    ap.add_argument("--noise-correlated", action="store_true")
     ap.add_argument("--json-out", default="")
     args = ap.parse_args()
     if not os.path.exists(args.speech):

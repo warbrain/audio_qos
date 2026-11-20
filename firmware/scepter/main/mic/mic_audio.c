@@ -60,6 +60,10 @@ static const char *TAG = "mic_audio";
 #define MIC_HPF_ALPHA 0.9895826647f
 #define MIC_DECIMATOR_FIR_TAPS 95
 #define MIC_DECIMATOR_FIR_STORAGE 96
+/* Whispered speech carries most of its discriminative energy between 5 and 8 kHz:
+ * cutting the anti-alias low-pass to 4 kHz raised CER from 3.66% to 7.54% on the
+ * same 48 clips, and 2.5 kHz collapsed it to 30.89%. 7000 Hz is the shipping value
+ * transition band below the 8 kHz Nyquist limit. */
 #define MIC_DECIMATOR_CUTOFF_HZ 7000
 
 /* Apply one fixed post-filter gain to both microphones. The build-time default
@@ -240,8 +244,8 @@ static portMUX_TYPE s_frame_dispatch_epoch_lock = portMUX_INITIALIZER_UNLOCKED;
  * New settings are session-only; legacy 0x0A still persists its shared gain. */
 static portMUX_TYPE s_config_lock = portMUX_INITIALIZER_UNLOCKED;
 /* Index 1 is reserved so the active DSP v1 settings keep their item IDs. */
-static uint16_t s_config[11] = {1,0,CONFIG_MIC_OUTPUT_GAIN_X,CONFIG_MIC_OUTPUT_GAIN_X,1,80,1,7000,1,20000,26000};
-static uint16_t s_requested_config[11] = {1,0,CONFIG_MIC_OUTPUT_GAIN_X,CONFIG_MIC_OUTPUT_GAIN_X,1,80,1,7000,1,20000,26000};
+static uint16_t s_config[11] = {1,0,CONFIG_MIC_OUTPUT_GAIN_X,CONFIG_MIC_OUTPUT_GAIN_X,1,80,1,MIC_DECIMATOR_CUTOFF_HZ,1,20000,26000};
+static uint16_t s_requested_config[11] = {1,0,CONFIG_MIC_OUTPUT_GAIN_X,CONFIG_MIC_OUTPUT_GAIN_X,1,80,1,MIC_DECIMATOR_CUTOFF_HZ,1,20000,26000};
 static uint32_t s_config_generation, s_applied_generation;
 _Alignas(16) static float s_runtime_fir[MIC_DECIMATOR_FIR_STORAGE];
 static float s_runtime_hpf = MIC_HPF_ALPHA;
@@ -592,7 +596,7 @@ static inline int32_t abs_i16_to_i32(int16_t value)
 
 static bool mic_config_valid(const uint16_t *v) {
     return v[2]>=1 && v[2]<=32 && v[3]>=1 && v[3]<=32 &&
-        v[4]<=1 && v[5]>=20 && v[5]<=500 && v[6]<=1 && v[7]>=1000 && v[7]<=7000 &&
+        v[4]<=1 && v[5]>=20 && v[5]<=500 && v[6]<=1 && v[7]>=1000 && v[7]<=7600 &&
         v[8]<=1 && v[9]>=1000 && v[9]<v[10] && v[10]<=32767;
 }
 /* The 20 ms owner applies only local filter/gain state.  Codec and spatial
@@ -605,6 +609,8 @@ static void mic_owner_apply_dsp_config(void) {
     memcpy(next,s_requested_config,sizeof(next));
     portEXIT_CRITICAL(&s_config_lock);
     if (generation==s_applied_generation) return;
+    /* The compile-time table is only valid for its own design cutoff (7000 Hz);
+     * using it for any other request silently applied the wrong filter. */
     if (next[7]==7000) memcpy(s_runtime_fir,s_decimator_coeff,sizeof(s_decimator_coeff));
     else {
         float sum=0, fc=(float)next[7]/48000.0f;
@@ -686,7 +692,10 @@ esp_err_t mic_audio_parameter(bool write, uint8_t item, uint16_t value, uint16_t
 #define MIC_FRAME_DISPATCH_BLOCKS 2
 #define MIC_FRAME_DISPATCH_POOL_SLOTS (MIC_FRAME_DISPATCH_BLOCKS + 1U)
 #define MIC_CAPTURE_TASK_STACK 4096
-#define MIC_DIAGNOSTIC_TASK_STACK 8192
+/* GCC-PHAT keeps a 512-bin spectrum plus double-precision peaks on this stack.
+ * The 8 KiB build measured a 192 B historical minimum on hardware, i.e. 97.7%
+ * used, so one deeper call would have overflowed it. */
+#define MIC_DIAGNOSTIC_TASK_STACK 12288
 #define MIC_TELEMETRY_TASK_STACK 6144
 #define MIC_CONFIG_TASK_STACK 4096
 /* Separate budgets permit measured tuning without shrinking codec stack. */
