@@ -535,7 +535,7 @@ static void mic_config_transition_task_fn(void *arg)
 
 static esp_err_t mic_codec_parameter(bool write, uint16_t value, uint16_t *actual)
 {
-    if (write && !dual_end_audio_codec_is_opus(value) && value != DUAL_END_AUDIO_CODEC_G722)
+    if (write && value != DUAL_END_AUDIO_CODEC_G722)
         return ESP_ERR_INVALID_ARG;
     if (write) {
         portENTER_CRITICAL(&s_config_lock);

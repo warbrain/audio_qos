@@ -50,3 +50,5 @@ _asr_sim/spatial_dir/
 _asr_sim/snr_threshold/
 # 模型权重
 _train/code/*.pt
+# Release notes are generated per release and stay out of the repository.
+firmware/RELEASE_NOTES_*.md

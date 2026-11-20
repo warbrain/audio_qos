@@ -4,6 +4,7 @@
 #endif
 
 #include "dual_end_audio.h"
+#include "dual_end_codec_frame.h"
 #include "dual_end_runtime.h"
 
 #include <inttypes.h>
@@ -19,7 +20,6 @@
 #include "esp_timer.h"
 #include "esp_g722_dec.h"
 #include "esp_g722_enc.h"
-#include "dual_end_opus.h"
 #include "dual_end_pcm_layout.h"
 #include "dual_end_spatial.h"
 #include "freertos/FreeRTOS.h"
@@ -37,12 +37,8 @@ static const char *TAG = "dual_end_audio";
 static const char *codec_profile_name(uint8_t codec)
 {
     switch (codec) {
-    case DUAL_END_AUDIO_CODEC_OPUS:
-        return "opus32";
     case DUAL_END_AUDIO_CODEC_G722:
         return "g72264";
-    case DUAL_END_AUDIO_CODEC_OPUS_62:
-        return "opus62";
     default:
         return "unknown";
     }
@@ -50,7 +46,8 @@ static const char *codec_profile_name(uint8_t codec)
 
 static const char *codec_fec_state(uint8_t codec)
 {
-    return dual_end_audio_codec_is_opus(codec) ? "0" : "na";
+    (void)codec;
+    return "na";
 }
 
 #define AUDIO_TX_LOG_INTERVAL_FRAMES (1000 / DUAL_END_AUDIO_FRAME_MS)
@@ -481,7 +478,6 @@ static void sender_invalidate_session_locked(void)
     audio_recovery_tx_session_reset(s_recovery_cache, 0);
     dual_end_espnow_link_discard_audio();
     sender_reset_encoders_locked();
-    dual_end_opus_encoder_reset();
 }
 
 static void sender_new_session_locked(void)
@@ -895,21 +891,19 @@ void dual_end_audio_sender_set_ota_paused(bool paused)
  * old codec frames, cached repairs and both encoder histories under one lock. */
 esp_err_t dual_end_audio_sender_set_codec(uint8_t codec)
 {
-    if ((codec != DUAL_END_AUDIO_CODEC_G722 && !dual_end_audio_codec_is_opus(codec)) ||
+    if (codec != DUAL_END_AUDIO_CODEC_G722 ||
         !s_sender_mutex) return ESP_ERR_INVALID_ARG;
     xSemaphoreTake(s_sender_mutex, portMAX_DELAY);
     if (codec == s_tx_codec) {
         xSemaphoreGive(s_sender_mutex);
         return ESP_OK;
     }
-    esp_err_t ret = dual_end_audio_codec_is_opus(codec) ?
-        dual_end_opus_encoder_prepare_for(codec) : ensure_g722_encoder();
+    esp_err_t ret = ensure_g722_encoder();
     if (ret == ESP_OK) {
         const uint8_t previous = s_tx_codec;
         sender_new_session_locked();
         s_tx_codec = codec;
-        ret = dual_end_audio_codec_is_opus(codec) ?
-            dual_end_opus_encoder_prepare_for(codec) : ensure_g722_encoder();
+        ret = ensure_g722_encoder();
         if (ret != ESP_OK) {
             s_tx_codec = previous;
             sender_new_session_locked();
@@ -934,8 +928,7 @@ esp_err_t dual_end_audio_sender_set_processing_layout(uint8_t layout)
      * left idle in dual mono must never resume old stereo history. Reset failure
      * closes the handle; prepare must successfully rebuild before owner commit. */
     sender_new_session_locked();
-    const esp_err_t ret = dual_end_audio_codec_is_opus(s_tx_codec) ?
-        dual_end_opus_encoder_prepare_for(s_tx_codec) : ensure_g722_encoder();
+    const esp_err_t ret = ensure_g722_encoder();
     if (ret == ESP_OK) s_tx_layout = layout;
     xSemaphoreGive(s_sender_mutex);
     return ret;
@@ -1147,13 +1140,10 @@ esp_err_t dual_end_audio_sender_send_pcm_with_hardware_and_analysis_at(
         }
     }
 #endif
-    esp_err_t encode_ret = dual_end_audio_codec_is_opus(s_tx_codec) ?
-        dual_end_opus_encode_with_layout(pcm, s_tx_packet.payload.audio,
-                            sizeof(s_tx_packet.payload.audio), &encoded_bytes,
-                            dual_mono, &process_calls) :
-        g722_encode_frame(pcm, s_tx_packet.payload.audio,
-                          sizeof(s_tx_packet.payload.audio), &encoded_bytes,
-                          dual_mono, &process_calls);
+    esp_err_t encode_ret = g722_encode_frame(pcm, s_tx_packet.payload.audio,
+                                              sizeof(s_tx_packet.payload.audio),
+                                              &encoded_bytes, dual_mono,
+                                              &process_calls);
     s_encoding_stats.process_calls += process_calls;
     if (encode_ret == ESP_OK) {
         ++s_encoding_stats.frames;

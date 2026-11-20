@@ -53,24 +53,9 @@ extern "C" {
     (DUAL_END_AUDIO_ADPCM_FRAME_BYTES * 2)
 #define DUAL_END_AUDIO_REDUNDANT_PCM16_PAYLOAD_BYTES \
     (DUAL_END_AUDIO_FRAME_SAMPLES * 2)
-#define DUAL_END_AUDIO_OPUS_BITRATE_BPS 32000
-#define DUAL_END_AUDIO_OPUS_COMPLEXITY 0
-#define DUAL_END_AUDIO_OPUS_CHANNEL_FRAME_BYTES 80
-#define DUAL_END_AUDIO_OPUS_FRAME_BYTES (4 + 2 * DUAL_END_AUDIO_OPUS_CHANNEL_FRAME_BYTES)
 /* Codec 5: same wire layout, higher CBR bitrate. 4 + 2*155 = 314 <= 320. */
-#define DUAL_END_AUDIO_OPUS62_BITRATE_BPS 62000
-#define DUAL_END_AUDIO_OPUS62_CHANNEL_FRAME_BYTES 155
-#define DUAL_END_AUDIO_OPUS62_FRAME_BYTES (4 + 2 * DUAL_END_AUDIO_OPUS62_CHANNEL_FRAME_BYTES)
 #define DUAL_END_AUDIO_CODEC_CAP_G722 0x01
-#define DUAL_END_AUDIO_CODEC_CAP_OPUS 0x02
-#define DUAL_END_AUDIO_CODEC_CAP_OPUS_62 0x04
-/* Release: G.722 only. Measured 24 clips: G.722 30.72% / Opus32 32.20% / Opus62 34.11%;
- * Opus gives no accuracy gain and costs more CPU (G.722 already uses 52% of the frame budget). */
 #define DUAL_END_AUDIO_CODEC_CAPABILITIES (DUAL_END_AUDIO_CODEC_CAP_G722)
-#define DUAL_END_AUDIO_OPUS_PREENCODED_FRAME_BYTES 160
-#define DUAL_END_AUDIO_OPUS_MAX_FRAME_BYTES 1275
-#define DUAL_END_AUDIO_REDUNDANT_OPUS_PAYLOAD_BYTES \
-    (DUAL_END_AUDIO_OPUS_MAX_FRAME_BYTES * 2)
 
 #define SCEPTER_ESPNOW_TX_POWER_QDBM 80
 
@@ -113,14 +98,7 @@ typedef enum {
     DUAL_END_AUDIO_CODEC_OPUS_62 = 5,
 } dual_end_audio_codec_t;
 
-/* Both Opus ids share one encoder API and one decoder; only the CBR frame
- * size differs. Use this instead of comparing against a single id. */
-static inline int dual_end_audio_codec_is_opus(uint8_t codec)
-{
-    return codec == DUAL_END_AUDIO_CODEC_OPUS || codec == DUAL_END_AUDIO_CODEC_OPUS_62;
-}
-DUAL_END_STATIC_ASSERT(DUAL_END_AUDIO_OPUS62_FRAME_BYTES <= DUAL_END_AUDIO_ENCODED_FRAME_BYTES,
-                       "Opus-62 payload must fit the encoded slot");
+/* Opus ids (3 and 5) stay reserved; the codec is not built. */
 
 typedef struct {
     uint8_t protocol_version;

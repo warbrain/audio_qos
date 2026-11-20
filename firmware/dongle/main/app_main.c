@@ -673,8 +673,7 @@ static esp_err_t dongle_dsp_request(const uint8_t *data) {
     if (data[1] == 2 && data[2] == 2) {
         const uint16_t value = dual_end_codec_u16(data + 8);
         const uint16_t required = value == DUAL_END_AUDIO_CODEC_G722 ? DUAL_END_AUDIO_CODEC_CAP_G722 :
-            value == DUAL_END_AUDIO_CODEC_OPUS ? DUAL_END_AUDIO_CODEC_CAP_OPUS :
-            value == DUAL_END_AUDIO_CODEC_OPUS_62 ? DUAL_END_AUDIO_CODEC_CAP_OPUS_62 : 0;
+        0;
         if (data[3] != 15 || !required ||
             !(required & dual_end_audio_receiver_codec_capabilities())) return ESP_ERR_INVALID_ARG;
     }
@@ -940,7 +939,7 @@ static void rgb_breath_task(void *arg)
 void app_main(void)
 {
     const scepter_role_t role = SCEPTER_ROLE_DONGLE;
-    ESP_LOGI(TAG, "CytoScepter dongle boot, fw=%s, rx=espnow, codecs=g722/opus, default=g722-stereo, usb=uac", SCEPTER_FW_VERSION);
+    ESP_LOGI(TAG, "CytoScepter dongle boot, fw=%s, rx=espnow, codecs=g722, default=g722-stereo, usb=uac", SCEPTER_FW_VERSION);
 
     ESP_ERROR_CHECK(rgb_led_init());
     BaseType_t rgb_task_ok = xTaskCreate(rgb_breath_task,

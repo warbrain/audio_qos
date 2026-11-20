@@ -4,6 +4,7 @@
 #endif
 
 #include "dual_end_audio.h"
+#include "dual_end_codec_frame.h"
 
 #include <inttypes.h>
 #include <stdbool.h>
@@ -19,7 +20,6 @@
 #include "esp_check.h"
 #include "esp_g722_dec.h"
 #include "esp_g722_enc.h"
-#include "dual_end_opus.h"
 #include "dual_end_pcm_layout.h"
 #include "dual_end_runtime.h"
 #include "esp_log.h"
@@ -345,10 +345,8 @@ static bool audio_format_valid(const dual_end_audio_frame_header_t *audio)
     const bool codec_size =
         (audio->codec == DUAL_END_AUDIO_CODEC_G722 &&
          audio->current_encoded_bytes == DUAL_END_AUDIO_G722_FRAME_BYTES) ||
-        (audio->codec == DUAL_END_AUDIO_CODEC_OPUS &&
-         audio->current_encoded_bytes == DUAL_END_AUDIO_OPUS_FRAME_BYTES) ||
-        (audio->codec == DUAL_END_AUDIO_CODEC_OPUS_62 &&
-         audio->current_encoded_bytes == DUAL_END_AUDIO_OPUS62_FRAME_BYTES);
+        (audio->codec == DUAL_END_AUDIO_CODEC_G722 &&
+         audio->current_encoded_bytes == DUAL_END_AUDIO_G722_FRAME_BYTES);
     return codec_size &&
            audio->sample_rate_hz == DUAL_END_AUDIO_SAMPLE_RATE_HZ &&
            audio->channels == DUAL_END_AUDIO_CHANNELS &&
@@ -363,12 +361,11 @@ static bool audio_format_valid(const dual_end_audio_frame_header_t *audio)
  * cannot bind a codec or mutate decoder state. */
 static bool receiver_bind_codec(uint8_t codec, uint32_t session_id)
 {
-    if ((codec != DUAL_END_AUDIO_CODEC_G722 && !dual_end_audio_codec_is_opus(codec)) ||
+    if (codec != DUAL_END_AUDIO_CODEC_G722 ||
         !s_rx_recovery.has_session || !s_rx_recovery.active ||
         session_id != s_rx_recovery.session_id) return false;
     if (s_rx_codec != UINT8_MAX) return codec == s_rx_codec;
-    esp_err_t ret = dual_end_audio_codec_is_opus(codec) ?
-        dual_end_opus_decoder_prepare() : ensure_g722_decoder();
+    esp_err_t ret = ensure_g722_decoder();
     if (ret != ESP_OK) return false;
     s_rx_codec = codec;
     ESP_LOGI(TAG, "receiver codec=%u session=%08" PRIx32, codec, session_id);
@@ -585,11 +582,9 @@ static void audio_poll_cb(void *ctx)
         ++audio_events;
         if (event.kind == AUDIO_RX_FRAME) {
             const int64_t decode_started_us = esp_timer_get_time();
-            esp_err_t decode_ret = dual_end_audio_codec_is_opus(s_rx_codec) ?
-                dual_end_opus_decode(event.encoded, sizeof(event.encoded),
-                    s_decoded_interleaved_pcm, sizeof(s_decoded_interleaved_pcm)) :
-                g722_decode_frame(event.encoded, sizeof(event.encoded),
-                    s_decoded_interleaved_pcm, sizeof(s_decoded_interleaved_pcm));
+            esp_err_t decode_ret = g722_decode_frame(event.encoded, sizeof(event.encoded),
+                                                 s_decoded_interleaved_pcm,
+                                                 sizeof(s_decoded_interleaved_pcm));
             const int64_t decode_us = esp_timer_get_time() - decode_started_us;
             note_duration_max(&s_decode_frame_max_us, decode_us);
             dual_end_runtime_record(DUAL_END_STAGE_DECODE, s_rx_codec, event.session_id,
@@ -597,7 +592,6 @@ static void audio_poll_cb(void *ctx)
             if (decode_ret != ESP_OK) {
                 /* One channel may have advanced before the other failed.
                  * Reset both before abandoning this synchronized session. */
-                if (dual_end_audio_codec_is_opus(s_rx_codec)) dual_end_opus_decoder_reset();
                 ++s_decode_error_frames;
                 audio_recovery_rx_abort(&s_rx_recovery, now_us);
                 continue;
@@ -631,8 +625,6 @@ static void audio_poll_cb(void *ctx)
                 ++s_recovered_decoded_frames;
             }
         } else {
-            /* Opus predictor reset is distinct from our bounded PCM fade. */
-            if (dual_end_audio_codec_is_opus(s_rx_codec)) dual_end_opus_decoder_reset();
             conceal_missing_frame();
             ++s_masked_frames;
         }
@@ -689,7 +681,6 @@ static void begin_audio_session(const dual_end_audio_session_packet_t *session,
     update_pending_nack(now_us);
     if (result == AUDIO_RX_SESSION_NEW) {
         reset_g722_decoder();
-        dual_end_opus_decoder_reset();
         s_rx_codec = UINT8_MAX;
         s_rx_session_generation = increment_nonzero(s_rx_session_generation);
         s_hid_sequence_valid = false;
@@ -890,7 +881,6 @@ static esp_err_t receiver_start_common(void)
 {
     audio_recovery_rx_init(&s_rx_recovery);
     s_rx_codec = UINT8_MAX;
-    dual_end_opus_decoder_reset();
     s_feedback_sequence = 0;
     s_nack_pending = false;
     s_hid_sequence_valid = false;
