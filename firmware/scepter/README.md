@@ -1,6 +1,6 @@
 # CytoScepter Scepter
 
-本工程是双麦系统的手持发送端，当前配对版本为 0.5.26 / ESP-IDF 6.0.3，目标芯片为 ESP32-S3-N16R8。本版新增 `SCEPTER_TELEMETRY <token> 6 <part>` 查询，共 17 段返回 `audio.dispatch` 的队列等待、帧龄、队列满、槽位失效/不可用、事件丢失、高水位和迟到事件计数。part 15 的 `le` 是旧 dispatch epoch 事件数，part 16 的 `la` 是无法归属当前遥测窗口/会话/配置的时序完成数；part 11 的 `li`、part 12 的 `lx`、part 13 的 `lb` 分别表示无活动窗口、窗口身份不匹配、入队时间早于当前窗口。所有原因均为 boot 累计，并共同归入 `late_events` 汇总；它们用于定位遥测归属问题，不等同于 PCM 丢帧或音频截止期错过。版本 0.5.22 起使用预分配 PCM 缓冲池和 SPSC 槽位编号环形队列，保留两帧排队上限，避免通过 FreeRTOS 队列复制整块 PCM；本版不改变编解码器、DSP、无线帧或 NVS 设置。0.5.21 增加 Scepter Opus 编码遥测；0.5.19 起每个五秒 capture-health 统计窗附加左右实际固定增益标签；空间模式 5（左右声道各自独立 Wiener）和其 Wiener 计时沿用 0.5.17 实现。保留双麦板自己的 PDM、LCD、按键、触摸、滚轮、IMU、电池、马达和 RGB 实现。
+本工程是双麦系统的手持发送端，当前配对版本为 0.5.26 / ESP-IDF 6.1.1，目标芯片为 ESP32-S3-N16R8。本版新增 `SCEPTER_TELEMETRY <token> 6 <part>` 查询，共 17 段返回 `audio.dispatch` 的队列等待、帧龄、队列满、槽位失效/不可用、事件丢失、高水位和迟到事件计数。part 15 的 `le` 是旧 dispatch epoch 事件数，part 16 的 `la` 是无法归属当前遥测窗口/会话/配置的时序完成数；part 11 的 `li`、part 12 的 `lx`、part 13 的 `lb` 分别表示无活动窗口、窗口身份不匹配、入队时间早于当前窗口。所有原因均为 boot 累计，并共同归入 `late_events` 汇总；它们用于定位遥测归属问题，不等同于 PCM 丢帧或音频截止期错过。版本 0.5.22 起使用预分配 PCM 缓冲池和 SPSC 槽位编号环形队列，保留两帧排队上限，避免通过 FreeRTOS 队列复制整块 PCM；本版不改变编解码器、DSP、无线帧或 NVS 设置。0.5.21 增加 Scepter Opus 编码遥测；0.5.19 起每个五秒 capture-health 统计窗附加左右实际固定增益标签；空间模式 5（左右声道各自独立 Wiener）和其 Wiener 计时沿用 0.5.17 实现。保留双麦板自己的 PDM、LCD、按键、触摸、滚轮、IMU、电池、马达和 RGB 实现。
 
 **本次没有修改 GPIO 或硬件外设配置。** NewPCB 单麦板和当前双麦板电路不同，不能交叉刷写镜像。
 
@@ -23,7 +23,7 @@ PDM L/R 48 kHz stereo
   -> 3:1 降采样
   -> 16 kHz / PCM16 / stereo
   -> 固定增益（无 NVS 覆盖时构建默认 8×，可配置 1×～32×）+ 双路共享限幅
-  -> VAD 配置默认关闭；本次运行状态须由设备读回/遥测确认，关闭时静音和低声 PCM 持续送入编码器
+  -> 静音和低声 PCM 持续送入编码器，固件不执行编码前 VAD
   -> G.722-L 160 bytes + G.722-R 160 bytes
   -> 400-byte 正常音频包
 ```
@@ -131,34 +131,26 @@ PDM 模式不使用 BCLK、LRCLK/WS，硬件没有独立麦克风 RST/EN。
 
 ## 构建
 
-目标 SDK 为 ESP-IDF **6.0.3**（本机安装于 `D:\esp\v6.0.3`）。先激活环境：
+目标 SDK 为 ESP-IDF **6.1.1**。本机 SDK 源码在 `D:\esp\v6.1.1\esp-idf`，配套工具在 `C:\Espressif\tools`。先加载安装器生成的 PowerShell 环境。
 
 ```powershell
-. D:\esp\v6.0.3\esp-idf\export.ps1
+. 'C:\Espressif\tools\Microsoft.v6.1.1.PowerShell_profile.ps1'
 ```
 
-若系统 PATH 上没有可用的 `python`（Windows 商店占位符不算），先指向 IDF 自带虚拟环境再激活：
+在本工程目录构建，输出到 `build-6.1.1/`。
 
 ```powershell
-$env:IDF_PYTHON_ENV_PATH = 'D:\esp\v6.0.3\tools\python\v6.0.3\venv'
-$env:PATH = "$env:IDF_PYTHON_ENV_PATH\Scripts;$env:PATH"
-. D:\esp\v6.0.3\esp-idf\export.ps1
+idf.py -B build-6.1.1 build
 ```
 
-然后在本工程目录构建，输出到 `build-6.0.3/`（不在源码树内）：
+托管组件由 `main/idf_component.yml` 管理。CMake 和组件清单都锁定了 SDK 版本，切换 SDK 时要同步更新两处并验证音频路径。
 
-```powershell
-idf.py -B build-6.0.3 build
-```
-
-托管组件由 `main/idf_component.yml` 拉取到 `managed_components/`，同样不属于源码树。工程在 CMake 中固定 `DUAL_END_IDF_VERSION`（默认 6.0.3），换版本需显式覆盖并重新验证音频路径。
-
-2026-11-12 验证：ESP-IDF 6.0.3 + xtensa-esp-elf 15.2.0 编译通过，`cytoscepter_scepter.bin` 为 1,289,712 字节（factory 分区余 18%）。本次只验证编译，未在设备上运行，也未重测 20 ms 实时预算、声学或 ASR 精度。
+2026-11-12 验证：ESP-IDF 6.1.1 + xtensa-esp-elf 15.2.0 编译通过，`cytoscepter_scepter.bin` 为 1,289,712 字节（factory 分区余 18%）。本次只验证编译，未在设备上运行，也未重测 20 ms 实时预算、声学或 ASR 精度。
 
 ## 日志检查
 
 - 启动：fw=0.5.23、codec=G722 stereo、air packet=400B、rate=5.5 Mbps、target=232ms、window=16。
-- 音频分析日志应显示 `vad=disabled`，且发送速率在静音时仍约为 50 fps。
+- 静音时发送速率仍约为 50 fps。旧 DSP v1 VAD 参数 1、11、12、13 依次读回 0、48、300、1，表示关闭、旧阈值、旧保持时间、门常开。更改开关、阈值或保持时间的请求返回错误，门状态为只读。
 - 正常发送：约 50 fps，观察 normal MAC ok/fail、deadline/queue drop。
 - 恢复发送：观察 NACK、repair queued/submitted/ok/fail/cancelled、budget_drop、cache miss/expired。
 - OTA：观察 `OTA transfer started/stopped`。

@@ -1,6 +1,6 @@
 # CytoScepter Dongle
 
-本工程是双麦系统的 USB 接收端，当前配对版本为 0.5.26 / ESP-IDF 6.0.3，目标芯片为 ESP32-S3-N16R8。本次把 Dongle 公共版本同步到 Scepter 0.5.26；Dongle 协议、遥测与音频处理均未改变。DSP 请求转发失败原因日志沿用 0.5.20 实现。VAD 和实际增益处理位于 Scepter。
+本工程是双麦系统的 USB 接收端，当前配对版本为 0.5.26 / ESP-IDF 6.1.1，目标芯片为 ESP32-S3-N16R8。本次把 Dongle 公共版本同步到 Scepter 0.5.26；Dongle 协议、遥测与音频处理均未改变。DSP 请求转发失败原因日志沿用 0.5.20 实现。VAD 和实际增益处理位于 Scepter。
 
 **本次没有修改 GPIO 或硬件外设配置。** NewPCB 单麦板和当前双麦板电路不同，不能交叉刷写镜像。
 
@@ -115,29 +115,21 @@ L/R 是 USB 声道顺序，实体麦克风对应关系需分别近讲或轻敲�
 
 ## 构建
 
-目标 SDK 为 ESP-IDF **6.0.3**（本机安装于 `D:\esp\v6.0.3`）。先激活环境：
+目标 SDK 为 ESP-IDF **6.1.1**。本机 SDK 源码在 `D:\esp\v6.1.1\esp-idf`，配套工具在 `C:\Espressif\tools`。先加载安装器生成的 PowerShell 环境。
 
 ```powershell
-. D:\esp\v6.0.3\esp-idf\export.ps1
+. 'C:\Espressif\tools\Microsoft.v6.1.1.PowerShell_profile.ps1'
 ```
 
-若系统 PATH 上没有可用的 `python`（Windows 商店占位符不算），先指向 IDF 自带虚拟环境再激活：
+在本工程目录构建，输出到 `build-6.1.1/`。
 
 ```powershell
-$env:IDF_PYTHON_ENV_PATH = 'D:\esp\v6.0.3\tools\python\v6.0.3\venv'
-$env:PATH = "$env:IDF_PYTHON_ENV_PATH\Scripts;$env:PATH"
-. D:\esp\v6.0.3\esp-idf\export.ps1
+idf.py -B build-6.1.1 build
 ```
 
-然后在本工程目录构建，输出到 `build-6.0.3/`（不在源码树内）：
+托管组件由 `main/idf_component.yml` 管理。USB UAC 使用本地组件。CMake 和组件清单都锁定了 SDK 版本，切换 SDK 时要同步更新两处并验证音频路径。
 
-```powershell
-idf.py -B build-6.0.3 build
-```
-
-托管组件（`esp_audio_codec`、`esp_tinyusb`、`tinyusb`、`cmake_utilities`）由 `main/idf_component.yml` 拉取到 `managed_components/`。USB UAC 本地组件仍随源码交付，不依赖修改下载缓存。工程在 CMake 中固定 `DUAL_END_IDF_VERSION`（默认 6.0.3），换版本需显式覆盖并重新验证音频路径。
-
-2026-11-12 验证：ESP-IDF 6.0.3 + xtensa-esp-elf 15.2.0 编译通过，`cytoscepter_dongle.bin` 为 1,082,128 字节（factory 分区余 31%）。本次只验证编译，未刷写设备，也未重测 USB/UAC 时序与恢复机制。
+2026-11-12 验证：ESP-IDF 6.1.1 + xtensa-esp-elf 15.2.0 编译通过，`cytoscepter_dongle.bin` 为 1,082,128 字节（factory 分区余 31%）。本次只验证编译，未刷写设备，也未重测 USB/UAC 时序与恢复机制。
 
 ## 日志检查
 

@@ -58,13 +58,13 @@ dependencies:
   idf:
     source:
       type: idf
-    version: 6.0.3
+    version: 6.1.1
 direct_dependencies:
 - espressif/cmake_utilities
 - espressif/esp_audio_codec
 - espressif/esp_tinyusb
 - espressif/tinyusb
 - idf
-manifest_hash: 5c7cd20b1aad4508f9eb3d623579d65d856fe756e62ad676cf8206ffb4156d57
+manifest_hash: 7bfb8d689d5965529793508bfe9965e478e74d8c88b37d35345350f154c6628b
 target: esp32s3
 version: 3.0.0
