@@ -70,3 +70,7 @@ _asr_sim/model_*_rows.jsonl
 _asr_sim/ss*_rows.jsonl
 _asr_sim/vad_removed_rows.jsonl
 _train/*.md
+
+# Datasets stay local; only code and configuration are tracked.
+qwen3-asr-strict-v6/
+_asr_sim/dist_*.json
