@@ -672,8 +672,9 @@ static esp_err_t dongle_dsp_request(const uint8_t *data) {
     if(!dual_end_dsp_version_item_valid(data[1],data[3]) || (data[2]!=1 && data[2]!=2) || data[10] || data[11] || data[12] || data[13] || data[14] || data[15]) return ESP_ERR_INVALID_ARG;
     if (data[1] == 2 && data[2] == 2) {
         const uint16_t value = dual_end_codec_u16(data + 8);
-        const uint16_t required = value == DUAL_END_AUDIO_CODEC_G722 ? DUAL_END_AUDIO_CODEC_CAP_G722 :
-        0;
+        const uint16_t required = value == DUAL_END_AUDIO_CODEC_G722
+                                     ? DUAL_END_AUDIO_CODEC_CAP_G722
+                                     : 0;
         if (data[3] != 15 || !required ||
             !(required & dual_end_audio_receiver_codec_capabilities())) return ESP_ERR_INVALID_ARG;
     }
