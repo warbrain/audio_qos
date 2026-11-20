@@ -41,7 +41,7 @@ Actual device identity is repeated with every window so a monitor attached after
 
 | Part | Fields |
 |---|---|
-| 0 | part_count=13, session_id, codec (3 Opus / 4 G.722), stage |
+| 0 | part_count=13, session_id, codec (4 G.722), stage |
 | 1 | start_us, end_us (device monotonic sample-window time, not host clock) |
 | 2 | samples, failures, invalid_duration |
 | 3 | sum_us, budget_us=20000, successful |

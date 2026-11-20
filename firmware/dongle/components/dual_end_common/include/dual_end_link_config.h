@@ -89,6 +89,9 @@ typedef enum {
     DUAL_END_CHANNEL_CMD_RESCAN_REQUEST = 0x07,
 } dual_end_channel_command_t;
 
+/* Wire codec ids. Only G.722 (4) is built and accepted on both ends; 0..2 were
+ * never implemented and 3/5 are the removed Opus ids. The remaining values are
+ * kept so historical packets and hosts still decode to a meaningful id. */
 typedef enum {
     DUAL_END_AUDIO_CODEC_PCM16 = 0,
     DUAL_END_AUDIO_CODEC_ADPCM_IMA4 = 1,

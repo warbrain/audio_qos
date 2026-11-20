@@ -1,5 +1,11 @@
 # Runtime dual-microphone codecs
 
+> **Status:** the Opus codecs (ids 3 and 5) were removed. Only G.722 (id 4) is built
+> and accepted by both ends. The paragraphs below that describe Opus behaviour are kept
+> as history: the ids remain reserved so the numeric protocol does not shift, but a write
+> of 3 or 5 now returns `ESP_ERR_INVALID_ARG` and a packet carrying them is rejected.
+
+
 ## DAS + Wiener post-filter (introduced in 0.5.16; telemetry fix in 0.5.17)
 
 Spatial mode 4 fuses the aligned microphone channels through the existing DAS
@@ -54,7 +60,7 @@ clipping and coefficient guards retain the existing freeze/fade/reset behavior.
 
 The capture owner applies the mode at a complete PCM boundary, resets matching
 and encoder histories, discards queued old-layout audio, and establishes a new
-recovery session. Layout 0 always makes two independent G.722/Opus encoder
+recovery session. Layout 0 always makes two independent G.722 encoder
 calls, even if the matched channels temporarily contain equal samples. No host
 NLMS or host beamforming is reintroduced. The UAC format remains synchronized
 16 kHz PCM16 stereo; downstream host mono downmix remains an independent step.
@@ -71,7 +77,6 @@ This component adds two independent mono Opus states to the existing G.722 dual-
 ## Codec settings
 
 - Default: G.722 codec value 4, packed 64 kbps per microphone, 160 bytes per microphone / 320 bytes per frame.
-- Opus: codec value 3, two mono encoders, 16 kHz / PCM16, 20 ms, 32 kbps CBR per microphone, restricted LOWDELAY application (CELT-only), complexity 0, FEC/DTX/VBR disabled. Exact output is checked against 80 bytes per microphone.
 - Each encoder uses its SDK-recommended output frame size (bounded to 80..1275 bytes) for a persistent scratch buffer. The radio packet receives only the checked 80-byte actual CBR output. Scratch is freed with its encoder on failed setup/reset.
 - Configure rate, expected frame sizes and complexity in both copies of `dual_end_link_config.h`. `dual_end_opus.c` explicitly selects application and optional features. Both header copies must remain identical.
 - These are codec settings, separate from device VAD, independent gains, high-pass/FIR, soft limiting and host ASR processing.

@@ -767,6 +767,9 @@ static uint32_t s_diagnostic_max_us, s_diagnostic_sequence;
 static dual_end_audio_analysis_metadata_t s_diagnostic_metadata;
 static bool s_analysis_available;
 static int64_t s_diagnostic_completed_us;
+/* Largest gap between two completed diagnostic frames. diag_age_ms below only
+ * samples the phase at the 5 s telemetry instant, so it cannot show jitter. */
+static int64_t s_diagnostic_max_gap_us;
 static uint32_t s_diagnostic_budget_skips, s_diagnostic_overload_skips, s_diagnostic_stale_skips;
 static uint64_t s_diagnostic_completed_frames, s_diagnostic_completed_total_us;
 static uint32_t s_diagnostic_lifetime_max_us;
@@ -1239,6 +1242,7 @@ static void mic_pipeline_reset(void) {
     mic_frame_dispatch_invalidate();
     memset(&s_diagnostic_metadata,0,sizeof(s_diagnostic_metadata));
     s_diagnostic_completed_us = 0;
+    s_diagnostic_max_gap_us = 0;
     portEXIT_CRITICAL(&s_pipeline_lock);
     if (s_capture_blocks) xQueueReset(s_capture_blocks);
     if (s_diagnostic_blocks) xQueueReset(s_diagnostic_blocks);
@@ -1370,6 +1374,10 @@ static void mic_diagnostic_task(void *arg) {
         if(elapsed>s_diagnostic_lifetime_max_us)s_diagnostic_lifetime_max_us=elapsed;
         if(generation==s_pipeline_generation) {
             s_diagnostic_metadata=metadata; s_diagnostic_sequence=block->sequence;
+            if(s_diagnostic_completed_us>0 && completed_us>s_diagnostic_completed_us) {
+                const int64_t gap_us=completed_us-s_diagnostic_completed_us;
+                if(gap_us>s_diagnostic_max_gap_us)s_diagnostic_max_gap_us=gap_us;
+            }
             s_diagnostic_completed_us=completed_us;
             ++s_diagnostic_frames; s_diagnostic_total_us+=elapsed;
             if(elapsed>s_diagnostic_max_us)s_diagnostic_max_us=elapsed;
@@ -1473,14 +1481,16 @@ static void mic_telemetry_task(void *arg)
             const uint32_t highwater=s_pipeline_highwater,misses=s_pipeline_deadline_misses;
             const uint32_t dma_overflows=s_dma_overflows,diag_sequence=s_diagnostic_sequence;
             const int64_t completed_us=s_diagnostic_completed_us;
+    const int64_t max_gap_us=s_diagnostic_max_gap_us;
             portEXIT_CRITICAL(&s_pipeline_lock);
             const int64_t age_us=completed_us ? esp_timer_get_time()-completed_us : -1;
             /* Preserve the older text IO observation for archived collectors.
              * New strict attribution uses audio.pipeline + runtime IO parts. */
             ESP_LOGI(TAG,"pipeline diag_raw_seq=%" PRIu32 " queue_highwater=%" PRIu32
                 " overload_stops=%" PRIu32 " diag_drops=%" PRIu32 " work_over_20ms=%" PRIu32 " dma_overflows=%" PRIu32
-                " diag_age_ms=%" PRId64 " diag_interval_ms=200",
-                diag_sequence,highwater,overloads,drops,misses,dma_overflows,age_us<0 ? -1 : age_us/1000);
+                " diag_age_ms=%" PRId64 " diag_max_gap_ms=%" PRId64 " diag_interval_ms=200",
+                diag_sequence,highwater,overloads,drops,misses,dma_overflows,age_us<0 ? -1 : age_us/1000,
+                   max_gap_us/1000);
             portENTER_CRITICAL(&s_config_lock);
             dual_end_spatial_telemetry_t spatial=s_spatial_telemetry;
             portEXIT_CRITICAL(&s_config_lock);
